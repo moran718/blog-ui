@@ -13,5 +13,28 @@
     </noscript>
     <div id="app"></div>
     <!-- built files will be auto injected -->
+
+    <!-- 看板娘 Live2D Widget -->
+    <script>
+      // 延迟加载看板娘，避免阻塞页面
+      window.addEventListener('load', function() {
+        var script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/gh/stevenjoezhang/live2d-widget@latest/autoload.js';
+        script.onerror = function() {
+          console.log('看板娘加载失败，尝试备用地址...');
+          var backupScript = document.createElement('script');
+          backupScript.src = 'https://unpkg.com/live2d-widget@3.1.4/lib/L2Dwidget.min.js';
+          backupScript.onload = function() {
+            L2Dwidget.init({
+              model: { jsonPath: 'https://unpkg.com/live2d-widget-model-shizuku@1.0.5/assets/shizuku.model.json' },
+              display: { position: 'left', width: 150, height: 300 },
+              mobile: { show: false }
+            });
+          };
+          document.body.appendChild(backupScript);
+        };
+        document.body.appendChild(script);
+      });
+    </script>
   </body>
 </html>
