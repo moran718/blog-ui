@@ -1,16 +1,19 @@
 <template>
   <div class="home">
+    <!-- 导航栏 -->
+    <NavBar />
+
     <!-- 首页背景图区域 -->
     <div class="hero-section" id="hero-section">
       <!-- 背景图片占位 -->
       <div class="hero-background">
-        <img src="../../image/wallhaven-7jp8qy.jpg" alt="背景图" class="hero-image" />
+        <img :src="bgImage" alt="背景图" class="hero-image" @load="handleBgLoad" @error="handleBgError" />
       </div>
       <!-- 中间内容 -->
       <div class="hero-content">
-        <h1 class="hero-title">看见</h1>
+        <h1 class="hero-title">拾 光</h1>
         <div class="hero-subtitle-box">
-          <span class="typing-text">{{ displayText }}<span class="cursor">|</span></span>
+          <span class="typing-text">{{ displayText }}<span class="cursor"></span></span>
         </div>
       </div>
       <!-- 向下滚动按钮 -->
@@ -37,58 +40,94 @@
 
     <!-- 主要内容区域 -->
     <div class="main-content" ref="mainContent">
-      <div class="content-container">
-        <div class="section-header" id="section-header">
-          <span class="section-icon">📋</span>
-          <h2>最新</h2>
-          <a href="#" class="more-link">MORE ›</a>
-        </div>
-        <div class="article-list">
-          <div class="article-card" v-for="article in articles" :key="article.id">
-            <div class="article-image">
-              <img :src="article.image" :alt="article.title" />
-            </div>
-            <div class="article-info">
-              <h3>{{ article.title }}</h3>
-              <p>{{ article.summary }}</p>
-              <div class="article-meta">
-                <span class="date">{{ article.date }}</span>
-                <span class="views">👁 {{ article.views }}</span>
+      <div class="content-wrapper">
+        <!-- 左侧边栏 -->
+        <aside class="sidebar">
+          <UserCard />
+          <CheckInCard />
+          <HotArticles :articles="hotArticles" />
+        </aside>
+
+        <!-- 右侧文章列表 -->
+        <div class="content-container">
+          <div class="section-header" id="section-header">
+            <span class="section-icon">📋</span>
+            <h2>最新</h2>
+            <router-link to="/record" class="more-link">MORE ›</router-link>
+          </div>
+          <div class="article-list">
+            <div class="article-card" v-for="article in articles" :key="article.id" @click="goToArticle(article.id)">
+              <div class="article-image">
+                <img :src="article.image" :alt="article.title" />
+              </div>
+              <div class="article-info">
+                <h3>{{ article.title }}</h3>
+                <p>{{ article.summary }}</p>
+                <div class="article-meta">
+                  <span class="date">{{ article.date }}</span>
+                  <span class="views">👁 {{ article.views }}</span>
+                  <LikeButton :count="article.likes || 0" :liked="article.isLiked || false"
+                    @like.stop="handleLike(article, $event)" />
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- 页脚 -->
+    <Footer />
   </div>
 </template>
 
 <script>
+import { getRandomBg, getFallbackBg } from '@/utils/randomBg'
+import { hideLoading } from '@/utils/pageLoader'
+import { http, getResourceUrl } from '@/utils/request'
+import NavBar from '@/components/NavBar.vue'
+import LikeButton from '@/components/LikeButton.vue'
+import HotArticles from '@/components/HotArticles.vue'
+import UserCard from '@/components/UserCard.vue'
+import CheckInCard from '@/components/CheckInCard.vue'
+import Footer from '@/components/Footer.vue'
+
 export default {
   name: 'HomePage',
+  components: {
+    NavBar,
+    LikeButton,
+    HotArticles,
+    UserCard,
+    CheckInCard,
+    Footer
+  },
   data() {
     return {
-      fullText: '相信记录的力量！',
+      fullText: '时光不语，却回答了所有问题！',
       displayText: '',
       currentIndex: 0,
       typingSpeed: 200,
       deleteSpeed: 100,
       isDeleting: false,
-      articles: [
-        { id: 1, title: 'Vue3 组合式 API 完全指南', summary: '深入了解 Vue3 的 Composition API，掌握 setup、ref、reactive 等核心概念...', image: 'https://picsum.photos/400/250?random=1', date: '2024-01-15', views: 1280 },
-        { id: 2, title: 'Spring Boot 微服务架构实战', summary: '从零开始构建微服务架构，包含服务注册、配置中心、网关等核心组件...', image: 'https://picsum.photos/400/250?random=2', date: '2024-01-14', views: 956 },
-        { id: 3, title: 'CSS Grid 布局详解', summary: '现代 CSS 布局方案，Grid 布局让复杂的页面布局变得简单高效...', image: 'https://picsum.photos/400/250?random=3', date: '2024-01-13', views: 823 },
-        { id: 4, title: 'TypeScript 高级类型技巧', summary: '掌握 TypeScript 的泛型、条件类型、映射类型等高级特性...', image: 'https://picsum.photos/400/250?random=4', date: '2024-01-12', views: 1102 },
-        { id: 5, title: 'MySQL 性能优化实践', summary: '数据库索引优化、SQL 调优、慢查询分析等实用技巧总结...', image: 'https://picsum.photos/400/250?random=5', date: '2024-01-11', views: 2045 },
-        { id: 6, title: 'Docker 容器化部署指南', summary: '从 Docker 基础到 Docker Compose 多容器编排，一站式学习容器技术...', image: 'https://picsum.photos/400/250?random=6', date: '2024-01-10', views: 1567 },
-        { id: 7, title: 'Redis 缓存策略与实战', summary: '缓存穿透、缓存击穿、缓存雪崩的解决方案，以及 Redis 集群搭建...', image: 'https://picsum.photos/400/250?random=7', date: '2024-01-09', views: 1890 },
-        { id: 8, title: 'JavaScript 异步编程详解', summary: 'Promise、async/await、事件循环机制深度剖析...', image: 'https://picsum.photos/400/250?random=8', date: '2024-01-08', views: 1345 },
-        { id: 9, title: 'Nginx 配置与负载均衡', summary: '反向代理、负载均衡、HTTPS 配置等 Nginx 核心功能详解...', image: 'https://picsum.photos/400/250?random=9', date: '2024-01-07', views: 987 }
-      ]
+      bgImage: '',
+      articles: [],
+      hotArticles: []
     }
   },
   mounted() {
+    this.bgImage = getRandomBg('home')
     this.startTyping()
+    this.loadArticles()
+    // 设置超时保护，防止图片加载失败导致加载动画一直显示
+    this.loadingTimeout = setTimeout(() => {
+      hideLoading()
+    }, 8000)
+  },
+  beforeDestroy() {
+    if (this.loadingTimeout) {
+      clearTimeout(this.loadingTimeout)
+    }
   },
   methods: {
     scrollToContent() {
@@ -111,11 +150,68 @@ export default {
           this.displayText = this.displayText.slice(0, -1)
           setTimeout(this.startTyping, this.deleteSpeed)
         } else {
-          
           this.isDeleting = false
           this.currentIndex = 0
           setTimeout(this.startTyping, 1000)
         }
+      }
+    },
+    handleBgLoad() {
+      // 清除超时
+      if (this.loadingTimeout) {
+        clearTimeout(this.loadingTimeout)
+      }
+      // 背景图加载完成，隐藏加载动画
+      hideLoading()
+    },
+    handleBgError() {
+      // 清除超时
+      if (this.loadingTimeout) {
+        clearTimeout(this.loadingTimeout)
+      }
+      this.bgImage = getFallbackBg(this.bgImage, 'home')
+      // 即使加载失败也隐藏加载动画
+      hideLoading()
+    },
+    handleLike(article, { liked, count }) {
+      article.isLiked = liked
+      article.likes = count
+      // 这里可以调用 API 保存点赞状态
+      console.log(`文章 ${article.id} 点赞状态: ${liked}, 数量: ${count}`)
+    },
+    goToArticle(id) {
+      this.$router.push(`/record/${id}`)
+    },
+    async loadArticles() {
+      try {
+        // 并行请求最新文章和热门文章
+        const [latestRes, hotRes] = await Promise.all([
+          http.get('/api/record/latest', { params: { limit: 9 } }),
+          http.get('/api/record/hot', { params: { limit: 5 } })
+        ])
+        if (latestRes.data) {
+          this.articles = latestRes.data.map(article => ({
+            id: article.id,
+            title: article.title,
+            summary: article.summary,
+            image: getResourceUrl(article.cover),
+            date: article.date,
+            views: article.views,
+            likes: article.likes,
+            isLiked: false
+          }))
+        }
+        if (hotRes.data) {
+          this.hotArticles = hotRes.data.map(article => ({
+            id: article.id,
+            title: article.title,
+            views: article.views,
+            likes: article.likes,
+            cover: getResourceUrl(article.cover)
+          }))
+        }
+      } catch (error) {
+        console.error('加载文章失败:', error)
       }
     }
   }
@@ -123,6 +219,13 @@ export default {
 </script>
 
 <style scoped>
+/* 首页容器 - 使用 flex 布局确保页脚贴底 */
+.home {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
 /* 首页背景区域 */
 .hero-section {
   position: relative;
@@ -184,9 +287,14 @@ export default {
 
 .cursor {
   display: inline-block;
-  margin-left: 2px;
-  font-weight: 300;
-  animation: blink 1s infinite;
+  margin-left: 4px;
+  width: 3px;
+  height: 1.2em;
+  background: linear-gradient(180deg, #ff6b6b, #feca57, #48dbfb);
+  background-size: 100% 300%;
+  animation: blink 0.8s step-end infinite, cursorGradient 2s ease infinite;
+  border-radius: 2px;
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.6);
 }
 
 @keyframes blink {
@@ -199,6 +307,18 @@ export default {
   51%,
   100% {
     opacity: 0;
+  }
+}
+
+@keyframes cursorGradient {
+
+  0%,
+  100% {
+    background-position: 0% 0%;
+  }
+
+  50% {
+    background-position: 0% 100%;
   }
 }
 
@@ -299,15 +419,37 @@ export default {
 /* 主要内容区域 */
 .main-content {
   position: relative;
-  padding: 60px 20px;
+  padding: 60px 20px 20px;
   background-color: #fff;
-  min-height: 100vh;
   z-index: 10;
+  flex: 1;
+}
+
+.content-wrapper {
+  display: flex;
+  gap: 30px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
 .content-container {
-  max-width: 1200px;
-  margin: 0 auto;
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar {
+  width: 320px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1100px) {
+  .content-wrapper {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+  }
 }
 
 .section-header {
@@ -347,16 +489,19 @@ export default {
 }
 
 .article-card {
-  background: #fff;
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .article-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  transform: translateY(-10px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  border-color: rgba(102, 126, 234, 0.3);
 }
 
 .article-image {
@@ -395,7 +540,8 @@ export default {
 
 .article-meta {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
   font-size: 12px;
   color: #999;
 }
@@ -404,20 +550,116 @@ export default {
   color: #ff69b4;
 }
 
-/* 响应式 */
+.article-meta .like-button-wrapper {
+  margin-left: auto;
+}
+
+.article-meta .like-button-wrapper :deep(.like-btn) {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.article-meta .like-button-wrapper :deep(.heart-icon) {
+  width: 14px;
+  height: 14px;
+}
+
+.article-meta .like-button-wrapper :deep(.like-count) {
+  font-size: 12px;
+}
+
+/* 响应式 - 平板 */
 @media (max-width: 992px) {
   .article-list {
     grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 576px) {
-  .article-list {
-    grid-template-columns: 1fr;
+    gap: 20px;
   }
 
   .hero-title {
-    font-size: 48px;
+    font-size: 56px;
+  }
+
+  .hero-subtitle {
+    font-size: 18px;
+  }
+
+  .section-header h2 {
+    font-size: 20px;
+  }
+}
+
+/* 响应式 - 手机 */
+@media (max-width: 576px) {
+  .article-list {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .hero-title {
+    font-size: 36px;
+  }
+
+  .hero-subtitle {
+    font-size: 14px;
+    padding: 0 20px;
+  }
+
+  .content-wrapper {
+    padding: 20px 15px;
+  }
+
+  .section-header {
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+  }
+
+  .section-header h2 {
+    font-size: 18px;
+  }
+
+  .section-icon {
+    font-size: 20px;
+  }
+
+  .article-image {
+    height: 160px;
+  }
+
+  .article-info {
+    padding: 15px;
+  }
+
+  .article-info h3 {
+    font-size: 16px;
+  }
+
+  .article-info p {
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+
+  .article-meta {
+    gap: 10px;
+    font-size: 11px;
+  }
+
+  .sidebar {
+    padding: 15px;
+  }
+}
+
+/* 响应式 - 超小屏幕 */
+@media (max-width: 375px) {
+  .hero-title {
+    font-size: 28px;
+  }
+
+  .hero-subtitle {
+    font-size: 12px;
+  }
+
+  .content-wrapper {
+    padding: 15px 10px;
   }
 }
 </style>

@@ -2,7 +2,7 @@
   <div class="essay-page" :class="{ 'dark-theme': isDarkTheme }">
     <!-- 全屏背景图 -->
     <div class="page-background">
-      <img src="../../image/wallhaven-391kqv.jpg" alt="背景图" class="bg-image" />
+      <img :src="bgImage" alt="背景图" class="bg-image" @load="handleBgLoad" @error="handleBgError" />
     </div>
 
     <!-- 导航栏 -->
@@ -55,7 +55,9 @@
               <img :src="essay.user.avatar" alt="头像" class="user-avatar" />
               <div class="user-info">
                 <span class="user-name">{{ essay.user.name }}</span>
-                <span class="user-level" :style="{ background: getLevelColor(essay.user.level) }">
+                <span class="user-level"
+                  :style="{ background: essay.user.levelColor || getLevelColor(essay.user.level) }">
+                  <span class="level-icon">{{ essay.user.levelIcon || '' }}</span>
                   LV{{ essay.user.level }}
                 </span>
                 <span class="user-title" :style="{ borderColor: getTitleColor(essay.user.title) }">
@@ -68,7 +70,12 @@
             <div class="essay-content">
               <p class="essay-text">{{ essay.content }}</p>
               <div class="essay-images" v-if="essay.images && essay.images.length">
-                <img v-for="(img, index) in essay.images" :key="index" :src="img" alt="图片" class="essay-image" />
+                <img v-for="(img, index) in essay.images" :key="index" :src="getResourceUrl(img)" alt="图片"
+                  class="essay-image" />
+              </div>
+              <div class="essay-videos" v-if="essay.videos && essay.videos.length">
+                <video v-for="(video, index) in essay.videos" :key="index" :src="getResourceUrl(video)" controls
+                  class="essay-video" preload="metadata"></video>
               </div>
             </div>
 
@@ -137,7 +144,9 @@
                   <div class="comment-body">
                     <div class="comment-user">
                       <span class="user-name">{{ comment.user.name }}</span>
-                      <span class="user-level" :style="{ background: getLevelColor(comment.user.level) }">
+                      <span class="user-level"
+                        :style="{ background: comment.user.levelColor || getLevelColor(comment.user.level) }">
+                        <span class="level-icon">{{ comment.user.levelIcon || '' }}</span>
                         LV{{ comment.user.level }}
                       </span>
                       <span class="user-title" :style="{ borderColor: getTitleColor(comment.user.title) }">
@@ -194,7 +203,9 @@
                         <div class="reply-body">
                           <div class="comment-user">
                             <span class="user-name">{{ reply.user.name }}</span>
-                            <span class="user-level" :style="{ background: getLevelColor(reply.user.level) }">
+                            <span class="user-level"
+                              :style="{ background: reply.user.levelColor || getLevelColor(reply.user.level) }">
+                              <span class="level-icon">{{ reply.user.levelIcon || '' }}</span>
                               LV{{ reply.user.level }}
                             </span>
                             <span class="user-title" :style="{ borderColor: getTitleColor(reply.user.title) }">
@@ -280,6 +291,9 @@
             @page-change="changeEssayPage" />
         </div>
       </div>
+
+      <!-- 页脚 -->
+      <Footer minimal />
     </div>
   </div>
 </template>
@@ -287,13 +301,17 @@
 <script>
 import NavBar from '@/components/NavBar.vue'
 import AppPagination from '@/components/Pagination.vue'
-import API_BASE_URL from '@/config/api'
+import Footer from '@/components/Footer.vue'
+import { http, getResourceUrl } from '@/utils/request'
+import { getRandomBg, getFallbackBg } from '@/utils/randomBg'
+import { hideLoading } from '@/utils/pageLoader'
 
 export default {
   name: 'EssayPage',
   components: {
     NavBar,
-    AppPagination
+    AppPagination,
+    Footer
   },
   data() {
     return {
@@ -308,6 +326,7 @@ export default {
       showReplyEmoji: {},
       replyContent: {},
       replyImages: {},
+      bgImage: '',
       emojis: [
         '😀', '😁', '😂', '🤣', '😃', '😄', '😅', '😆', '😉', '😊',
         '😋', '😎', '😍', '😘', '🥰', '😗', '😙', '😚', '🙂', '🤗',
@@ -334,15 +353,26 @@ export default {
     }
   },
   mounted() {
+    this.bgImage = getRandomBg('essay')
     this.checkTheme()
     this.loadEssays()
     this.setupScrollListener()
+    // 超时保护
+    this.loadingTimeout = setTimeout(() => {
+      hideLoading()
+    }, 8000)
   },
   beforeDestroy() {
     window.removeEventListener('wheel', this.handleWheel)
     window.removeEventListener('scroll', this.handleScroll)
+    if (this.loadingTimeout) {
+      clearTimeout(this.loadingTimeout)
+    }
   },
   methods: {
+    getResourceUrl(path) {
+      return getResourceUrl(path)
+    },
     checkTheme() {
       this.isDarkTheme = document.body.classList.contains('dark-theme')
     },
@@ -387,19 +417,14 @@ export default {
     async loadEssays(page = 1) {
       this.loading = true
       try {
-        const response = await fetch(`${API_BASE_URL}/api/essay/list?page=${page}&size=${this.pageSize}`, {
-          credentials: 'include'
-        })
-        const result = await response.json()
-        if (result.code === 200 && result.data) {
-          this.essays = result.data.list || []
-          this.currentPage = result.data.page
-          this.totalPages = result.data.totalPages
-          this.totalEssays = result.data.total
-          this.hasNext = result.data.hasNext
-          this.hasPrev = result.data.hasPrev
-        } else {
-          console.error('加载随笔失败:', result.message)
+        const res = await http.get('/api/essay/list', { page, size: this.pageSize })
+        if (res.data) {
+          this.essays = res.data.list || []
+          this.currentPage = res.data.page
+          this.totalPages = res.data.totalPages
+          this.totalEssays = res.data.total
+          this.hasNext = res.data.hasNext
+          this.hasPrev = res.data.hasPrev
         }
       } catch (error) {
         console.error('加载随笔失败:', error)
@@ -428,23 +453,18 @@ export default {
     },
     async loadEssayComments(essayId, page = 1) {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/essay/${essayId}/comments?page=${page}&pageSize=${this.commentPageSize}`, {
-          credentials: 'include'
-        })
-        const result = await response.json()
-        if (result.code === 200 && result.data) {
-          // 更新评论列表
+        const res = await http.get(`/api/essay/${essayId}/comments`, { page, pageSize: this.commentPageSize })
+        if (res.data) {
           const essay = this.essays.find(e => e.id === essayId)
           if (essay) {
-            this.$set(essay, 'commentList', result.data.list || [])
+            this.$set(essay, 'commentList', res.data.list || [])
           }
-          // 更新分页状态
           this.$set(this.commentPagination, essayId, {
-            currentPage: result.data.page,
-            totalPages: result.data.totalPages,
-            total: result.data.total,
-            hasNext: result.data.hasNext,
-            hasPrev: result.data.hasPrev
+            currentPage: res.data.page,
+            totalPages: res.data.totalPages,
+            total: res.data.total,
+            hasNext: res.data.hasNext,
+            hasPrev: res.data.hasPrev
           })
         }
       } catch (error) {
@@ -494,30 +514,15 @@ export default {
         return
       }
 
-      // 上传图片到服务器
-      const formData = new FormData()
-      formData.append('file', file)
-
       try {
-        const response = await fetch(`${API_BASE_URL}/api/essay/uploadImage`, {
-          method: 'POST',
-          credentials: 'include',
-          body: formData
-        })
-        const result = await response.json()
-        if (result.code === 200) {
-          if (!this.uploadedImages[essayId]) {
-            this.$set(this.uploadedImages, essayId, [])
-          }
-          this.uploadedImages[essayId].push(result.data)
-        } else if (result.code === 401) {
-          alert('请先登录')
-        } else {
-          alert(result.message || '图片上传失败')
+        const res = await http.upload('/api/essay/uploadImage', file)
+        if (!this.uploadedImages[essayId]) {
+          this.$set(this.uploadedImages, essayId, [])
         }
+        this.uploadedImages[essayId].push(res.data)
       } catch (error) {
         console.error('图片上传失败:', error)
-        alert('图片上传失败，请稍后重试')
+        alert(error.message || '图片上传失败')
       }
 
       event.target.value = ''
@@ -535,43 +540,28 @@ export default {
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/essay/comment`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            essayId: essayId,
-            parentId: 0,
-            content: content,
-            images: images
-          })
+        const res = await http.post('/api/essay/comment', {
+          essayId: essayId,
+          parentId: 0,
+          content: content,
+          images: images
         })
-        const result = await response.json()
-        if (result.code === 200) {
-          // 局部更新：将新评论添加到列表
-          const essay = this.essays.find(e => e.id === essayId)
-          if (essay) {
-            if (!essay.commentList) {
-              this.$set(essay, 'commentList', [])
-            }
-            essay.commentList.push(result.data)
-            essay.comments = (essay.comments || 0) + 1
+        const essay = this.essays.find(e => e.id === essayId)
+        if (essay) {
+          if (!essay.commentList) {
+            this.$set(essay, 'commentList', [])
           }
-          // 清空输入
-          this.$set(this.messageContent, essayId, '')
-          this.$set(this.uploadedImages, essayId, [])
-          this.$set(this.showMessageBox, essayId, false)
-          this.$set(this.showEmojiPicker, essayId, false)
-          // 自动展开评论区
-          this.$set(this.expandedComments, essayId, true)
-        } else if (result.code === 401) {
-          alert('请先登录')
-        } else {
-          alert(result.message || '留言失败')
+          essay.commentList.push(res.data)
+          essay.comments = (essay.comments || 0) + 1
         }
+        this.$set(this.messageContent, essayId, '')
+        this.$set(this.uploadedImages, essayId, [])
+        this.$set(this.showMessageBox, essayId, false)
+        this.$set(this.showEmojiPicker, essayId, false)
+        this.$set(this.expandedComments, essayId, true)
       } catch (error) {
         console.error('留言失败:', error)
-        alert('留言失败，请稍后重试')
+        alert(error.message || '留言失败')
       }
     },
     // 回复相关方法
@@ -628,30 +618,15 @@ export default {
 
       const key = replyId ? `${essayId}-${commentId}-${replyId}` : `${essayId}-${commentId}`
 
-      // 上传图片到服务器
-      const formData = new FormData()
-      formData.append('file', file)
-
       try {
-        const response = await fetch(`${API_BASE_URL}/api/essay/uploadImage`, {
-          method: 'POST',
-          credentials: 'include',
-          body: formData
-        })
-        const result = await response.json()
-        if (result.code === 200) {
-          if (!this.replyImages[key]) {
-            this.$set(this.replyImages, key, [])
-          }
-          this.replyImages[key].push(result.data)
-        } else if (result.code === 401) {
-          alert('请先登录')
-        } else {
-          alert(result.message || '图片上传失败')
+        const res = await http.upload('/api/essay/uploadImage', file)
+        if (!this.replyImages[key]) {
+          this.$set(this.replyImages, key, [])
         }
+        this.replyImages[key].push(res.data)
       } catch (error) {
         console.error('图片上传失败:', error)
-        alert('图片上传失败，请稍后重试')
+        alert(error.message || '图片上传失败')
       }
 
       event.target.value = ''
@@ -686,55 +661,40 @@ export default {
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/essay/comment`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            essayId: essayId,
-            parentId: commentId,
-            replyToUserId: replyToUserId,
-            content: (content || '').trim(),
-            images: images
-          })
+        const res = await http.post('/api/essay/comment', {
+          essayId: essayId,
+          parentId: commentId,
+          replyToUserId: replyToUserId,
+          content: (content || '').trim(),
+          images: images
         })
-        const result = await response.json()
-        if (result.code === 200) {
-          // 局部更新：将回复添加到评论的 replies 列表
-          const essay = this.essays.find(e => e.id === essayId)
-          if (essay) {
-            const comment = essay.commentList.find(c => c.id === commentId)
-            if (comment) {
-              if (!comment.replies) {
-                this.$set(comment, 'replies', [])
-              }
-              // 构建回复对象（后端返回的是 CommentVO，需要转换为 ReplyVO 格式）
-              const replyData = result.data
-              const newReply = {
-                id: replyData.id,
-                user: replyData.user,
-                content: replyData.content,
-                images: replyData.images,
-                date: replyData.date,
-                replyTo: replyId ? replyToName : null
-              }
-              comment.replies.push(newReply)
-              essay.comments = (essay.comments || 0) + 1
+        const essay = this.essays.find(e => e.id === essayId)
+        if (essay) {
+          const comment = essay.commentList.find(c => c.id === commentId)
+          if (comment) {
+            if (!comment.replies) {
+              this.$set(comment, 'replies', [])
             }
+            const replyData = res.data
+            const newReply = {
+              id: replyData.id,
+              user: replyData.user,
+              content: replyData.content,
+              images: replyData.images,
+              date: replyData.date,
+              replyTo: replyId ? replyToName : null
+            }
+            comment.replies.push(newReply)
+            essay.comments = (essay.comments || 0) + 1
           }
-          // 清空并关闭
-          this.$set(this.replyContent, key, '')
-          this.$set(this.replyImages, key, [])
-          this.$set(this.showReplyBox, key, false)
-          this.$set(this.showReplyEmoji, key, false)
-        } else if (result.code === 401) {
-          alert('请先登录')
-        } else {
-          alert(result.message || '回复失败')
         }
+        this.$set(this.replyContent, key, '')
+        this.$set(this.replyImages, key, [])
+        this.$set(this.showReplyBox, key, false)
+        this.$set(this.showReplyEmoji, key, false)
       } catch (error) {
         console.error('回复失败:', error)
-        alert('回复失败，请稍后重试')
+        alert(error.message || '回复失败')
       }
     },
     getLevelColor(level) {
@@ -760,6 +720,19 @@ export default {
         '太乙玉仙': '#e91e63'
       }
       return colors[title] || '#999'
+    },
+    handleBgLoad() {
+      if (this.loadingTimeout) {
+        clearTimeout(this.loadingTimeout)
+      }
+      hideLoading()
+    },
+    handleBgError() {
+      if (this.loadingTimeout) {
+        clearTimeout(this.loadingTimeout)
+      }
+      this.bgImage = getFallbackBg(this.bgImage, 'essay')
+      hideLoading()
     }
   }
 }
@@ -1042,6 +1015,13 @@ export default {
   font-size: 12px;
   color: #fff;
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.user-level .level-icon {
+  font-size: 11px;
 }
 
 .user-title {
@@ -1080,6 +1060,20 @@ export default {
 
 .essay-image:hover {
   transform: scale(1.02);
+}
+
+.essay-videos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.essay-video {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 8px;
+  background: #000;
 }
 
 /* 底部信息 */
@@ -1602,5 +1596,149 @@ export default {
 .reply-uploaded-images .uploaded-image-item {
   width: 60px;
   height: 60px;
+}
+
+/* 响应式布局 - 平板 */
+@media (max-width: 992px) {
+  .essay-container {
+    max-width: 100%;
+    padding: 20px 30px;
+  }
+
+  .essay-card {
+    padding: 20px;
+  }
+
+  .hero-title {
+    font-size: 48px;
+  }
+
+  .hero-subtitle {
+    font-size: 16px;
+  }
+}
+
+/* 响应式布局 - 手机 */
+@media (max-width: 768px) {
+  .essay-container {
+    padding: 15px;
+  }
+
+  .essay-card {
+    padding: 15px;
+    margin-bottom: 15px;
+  }
+
+  .essay-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .essay-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .essay-username {
+    font-size: 14px;
+  }
+
+  .essay-text {
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .essay-image {
+    max-height: 250px;
+  }
+
+  .essay-video {
+    max-height: 300px;
+  }
+
+  .essay-footer {
+    padding-top: 12px;
+  }
+
+  .essay-date {
+    font-size: 12px;
+  }
+
+  .action-icon {
+    font-size: 16px;
+  }
+
+  .action-count {
+    font-size: 12px;
+  }
+
+  .hero-title {
+    font-size: 36px;
+  }
+
+  .hero-subtitle {
+    font-size: 14px;
+    padding: 0 20px;
+  }
+
+  /* 评论区响应式 */
+  .comment-item {
+    padding: 12px 0;
+  }
+
+  .comment-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .comment-username {
+    font-size: 13px;
+  }
+
+  .comment-text {
+    font-size: 13px;
+  }
+
+  .message-box {
+    padding: 12px;
+  }
+
+  .message-input {
+    min-height: 60px;
+    font-size: 14px;
+  }
+
+  /* 留言输入框图片上传 */
+  .uploaded-image-item {
+    width: 60px;
+    height: 60px;
+  }
+}
+
+/* 响应式布局 - 超小屏幕 */
+@media (max-width: 375px) {
+  .essay-container {
+    padding: 10px;
+  }
+
+  .essay-card {
+    padding: 12px;
+  }
+
+  .hero-title {
+    font-size: 28px;
+  }
+
+  .hero-subtitle {
+    font-size: 12px;
+  }
+
+  .essay-images {
+    gap: 6px;
+  }
+
+  .essay-image {
+    max-height: 200px;
+  }
 }
 </style>

@@ -1,8 +1,8 @@
 <template>
-  <div class="record-page">
+  <div class="record-page" :class="{ 'dark-theme': isDarkTheme }">
     <!-- 全屏背景图 -->
     <div class="page-background">
-      <img src="../../image/wallhaven-7jp8qy.jpg" alt="背景图" class="bg-image" />
+      <img :src="bgImage" alt="背景图" class="bg-image" @load="handleBgLoad" @error="handleBgError" />
     </div>
 
     <!-- 导航栏 -->
@@ -123,7 +123,7 @@
             <div v-for="record in records" :key="record.id" class="record-card" @click="viewRecord(record)">
               <!-- 封面图 -->
               <div v-if="record.cover" class="record-cover">
-                <img :src="record.cover" :alt="record.title" />
+                <img :src="getResourceUrl(record.cover)" :alt="record.title" />
                 <div class="cover-overlay">
                   <span class="category-badge">{{ record.categoryName }}</span>
                 </div>
@@ -182,6 +182,9 @@
             :has-next="currentPage < totalPages" :has-prev="currentPage > 1" @page-change="changePage" />
         </main>
       </div>
+
+      <!-- 页脚 -->
+      <Footer minimal />
     </div>
   </div>
 </template>
@@ -189,19 +192,21 @@
 <script>
 import NavBar from '@/components/NavBar.vue'
 import AppPagination from '@/components/Pagination.vue'
-
-import API_BASE_URL from '@/config/api'
-
-const API_BASE = API_BASE_URL
+import Footer from '@/components/Footer.vue'
+import { http, getResourceUrl } from '@/utils/request'
+import { getRandomBg, getFallbackBg } from '@/utils/randomBg'
+import { hideLoading } from '@/utils/pageLoader'
 
 export default {
   name: 'RecordPage',
   components: {
     NavBar,
-    AppPagination
+    AppPagination,
+    Footer
   },
   data() {
     return {
+      isDarkTheme: false,
       showContent: false,
       selectedCategory: 'all',
       selectedSubCategory: null,
@@ -215,7 +220,8 @@ export default {
       categories: [],
       subCategoryMap: {},
       hotTags: [],
-      records: []
+      records: [],
+      bgImage: ''
     }
   },
   computed: {
@@ -240,11 +246,31 @@ export default {
     }
   },
   mounted() {
+    this.bgImage = getRandomBg('record')
+    this.checkTheme()
     this.setupScrollListener()
     this.loadInitialData()
+    // 监听主题变化
+    this.themeObserver = new MutationObserver(() => {
+      this.checkTheme()
+    })
+    this.themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    })
+    // 超时保护
+    this.loadingTimeout = setTimeout(() => {
+      hideLoading()
+    }, 8000)
   },
   beforeDestroy() {
     window.removeEventListener('wheel', this.handleWheel)
+    if (this.loadingTimeout) {
+      clearTimeout(this.loadingTimeout)
+    }
+    if (this.themeObserver) {
+      this.themeObserver.disconnect()
+    }
   },
   watch: {
     '$route.query.category': {
@@ -267,6 +293,12 @@ export default {
     }
   },
   methods: {
+    getResourceUrl(path) {
+      return getResourceUrl(path)
+    },
+    checkTheme() {
+      this.isDarkTheme = document.documentElement.classList.contains('dark-theme')
+    },
     // 初始化加载数据
     async loadInitialData() {
       await Promise.all([
@@ -279,13 +311,8 @@ export default {
     // 加载分类
     async loadCategories() {
       try {
-        const response = await fetch(`${API_BASE}/api/record/categories`, {
-          credentials: 'include'
-        })
-        const result = await response.json()
-        if (result.code === 200) {
-          this.categories = result.data
-        }
+        const res = await http.get('/api/record/categories')
+        this.categories = res.data
       } catch (error) {
         console.error('加载分类失败:', error)
       }
@@ -293,13 +320,8 @@ export default {
     // 加载子分类
     async loadSubCategories() {
       try {
-        const response = await fetch(`${API_BASE}/api/record/subcategories`, {
-          credentials: 'include'
-        })
-        const result = await response.json()
-        if (result.code === 200) {
-          this.subCategoryMap = result.data
-        }
+        const res = await http.get('/api/record/subcategories')
+        this.subCategoryMap = res.data
       } catch (error) {
         console.error('加载子分类失败:', error)
       }
@@ -307,13 +329,8 @@ export default {
     // 加载热门标签
     async loadHotTags() {
       try {
-        const response = await fetch(`${API_BASE}/api/record/hot-tags?limit=10`, {
-          credentials: 'include'
-        })
-        const result = await response.json()
-        if (result.code === 200) {
-          this.hotTags = result.data
-        }
+        const res = await http.get('/api/record/hot-tags', { limit: 10 })
+        this.hotTags = res.data
       } catch (error) {
         console.error('加载热门标签失败:', error)
       }
@@ -322,27 +339,23 @@ export default {
     async loadRecords() {
       this.loading = true
       try {
-        const params = new URLSearchParams()
-        params.append('page', this.currentPage)
-        params.append('pageSize', this.pageSize)
-        params.append('sortBy', this.sortBy)
+        const params = {
+          page: this.currentPage,
+          pageSize: this.pageSize,
+          sortBy: this.sortBy
+        }
         if (this.selectedCategory && this.selectedCategory !== 'all') {
-          params.append('category', this.selectedCategory)
+          params.category = this.selectedCategory
         }
         if (this.selectedSubCategory) {
-          params.append('subCategory', this.selectedSubCategory)
+          params.subCategory = this.selectedSubCategory
         }
         if (this.selectedTag) {
-          params.append('tag', this.selectedTag)
+          params.tag = this.selectedTag
         }
-        const response = await fetch(`${API_BASE}/api/record/list?${params.toString()}`, {
-          credentials: 'include'
-        })
-        const result = await response.json()
-        if (result.code === 200) {
-          this.records = result.data.list
-          this.totalRecords = result.data.total
-        }
+        const res = await http.get('/api/record/list', params)
+        this.records = res.data.list
+        this.totalRecords = res.data.total
       } catch (error) {
         console.error('加载记录失败:', error)
       } finally {
@@ -415,6 +428,19 @@ export default {
     },
     viewRecord(record) {
       this.$router.push(`/record/${record.id}`)
+    },
+    handleBgLoad() {
+      if (this.loadingTimeout) {
+        clearTimeout(this.loadingTimeout)
+      }
+      hideLoading()
+    },
+    handleBgError() {
+      if (this.loadingTimeout) {
+        clearTimeout(this.loadingTimeout)
+      }
+      this.bgImage = getFallbackBg(this.bgImage, 'record')
+      hideLoading()
     }
   }
 }
@@ -882,13 +908,14 @@ export default {
 }
 
 .record-card {
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 .record-list.list .record-card {
@@ -896,8 +923,9 @@ export default {
 }
 
 .record-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+  transform: translateY(-10px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18);
+  border-color: rgba(102, 126, 234, 0.3);
 }
 
 .record-cover {
@@ -1089,6 +1117,213 @@ export default {
   .record-list.list .record-cover {
     width: 100%;
     height: 200px;
+  }
+}
+
+/* ========== 黑暗主题适配 ========== */
+.dark-theme .sidebar-header {
+  background: rgba(30, 30, 50, 0.9);
+  color: #eee;
+  border-bottom-color: rgba(100, 100, 120, 0.3);
+}
+
+.dark-theme .category-list {
+  background: rgba(30, 30, 50, 0.85);
+}
+
+.dark-theme .category-item:hover {
+  background: rgba(60, 60, 80, 0.5);
+}
+
+.dark-theme .category-item.active {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+}
+
+.dark-theme .category-name {
+  color: #ddd;
+}
+
+.dark-theme .category-count {
+  background: rgba(80, 80, 100, 0.8);
+  color: #bbb;
+}
+
+.dark-theme .sub-category-list {
+  background: rgba(30, 30, 50, 0.85);
+}
+
+.dark-theme .sub-category-tag {
+  background: rgba(60, 60, 80, 0.8);
+  color: #ccc;
+}
+
+.dark-theme .sub-category-tag:hover {
+  background: rgba(80, 80, 100, 0.8);
+}
+
+.dark-theme .tag-cloud {
+  background: rgba(30, 30, 50, 0.85);
+}
+
+.dark-theme .tag-item {
+  border-color: rgba(100, 100, 120, 0.5);
+  color: #bbb;
+}
+
+.dark-theme .tag-item:hover {
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.dark-theme .main-header {
+  background: rgba(30, 30, 50, 0.85);
+}
+
+.dark-theme .main-header .header-title h2 {
+  color: #eee;
+}
+
+.dark-theme .mode-btn {
+  background: rgba(60, 60, 80, 0.8);
+}
+
+.dark-theme .mode-btn svg {
+  stroke: #bbb;
+}
+
+.dark-theme .mode-btn:hover {
+  background: rgba(80, 80, 100, 0.8);
+}
+
+.dark-theme .sort-select {
+  background: rgba(40, 40, 60, 0.9);
+  border-color: rgba(100, 100, 120, 0.5);
+  color: #ccc;
+}
+
+.dark-theme .record-card {
+  background: rgba(30, 30, 50, 0.85);
+}
+
+.dark-theme .record-title {
+  color: #eee;
+}
+
+.dark-theme .record-summary {
+  color: #aaa;
+}
+
+.dark-theme .meta-item {
+  color: #888;
+}
+
+.dark-theme .record-tags .tag {
+  background: rgba(60, 60, 80, 0.8);
+  color: #bbb;
+}
+
+.dark-theme .empty-state {
+  background: rgba(30, 30, 50, 0.85);
+}
+
+.dark-theme .loading-state {
+  background: rgba(30, 30, 50, 0.85);
+}
+
+/* 响应式布局 - 手机 */
+@media (max-width: 768px) {
+  .record-container {
+    padding: 15px;
+  }
+
+  .category-sidebar {
+    margin-bottom: 20px;
+  }
+
+  .sidebar-header {
+    padding: 12px 15px;
+    font-size: 14px;
+  }
+
+  .category-item {
+    padding: 10px 15px;
+    font-size: 13px;
+  }
+
+  .record-card {
+    border-radius: 12px;
+  }
+
+  .record-list.list .record-cover {
+    height: 180px;
+  }
+
+  .record-list.grid .record-cover {
+    height: 150px;
+  }
+
+  .record-content {
+    padding: 12px 15px;
+  }
+
+  .record-title {
+    font-size: 15px;
+  }
+
+  .record-summary {
+    font-size: 13px;
+  }
+
+  .record-meta {
+    font-size: 11px;
+    gap: 8px;
+  }
+
+  .hero-title {
+    font-size: 36px;
+  }
+
+  .hero-subtitle {
+    font-size: 14px;
+    padding: 0 20px;
+  }
+
+  /* 筛选和搜索区域 */
+  .filter-bar {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .hot-tags {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+/* 响应式布局 - 超小屏幕 */
+@media (max-width: 375px) {
+  .record-container {
+    padding: 10px;
+  }
+
+  .record-list.list .record-cover {
+    height: 150px;
+  }
+
+  .record-content {
+    padding: 10px 12px;
+  }
+
+  .record-title {
+    font-size: 14px;
+  }
+
+  .hero-title {
+    font-size: 28px;
+  }
+
+  .hero-subtitle {
+    font-size: 12px;
   }
 }
 </style>

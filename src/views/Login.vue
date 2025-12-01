@@ -2,7 +2,7 @@
   <div class="login-page">
     <!-- 背景图片 -->
     <div class="login-background">
-      <img src="../../image/wallhaven-9oo2k1.jpg" alt="背景图" class="bg-image" />
+      <img :src="bgImage" alt="背景图" class="bg-image" @error="handleBgError" />
     </div>
 
     <!-- 登录框 -->
@@ -52,7 +52,7 @@
               <input type="checkbox" v-model="loginForm.rememberMe" />
               <span>记住我</span>
             </label>
-            <a href="#" class="forgot-password">忘记密码？</a>
+            <a href="#" class="forgot-password" @click.prevent="showForgotPassword = true">忘记密码？</a>
           </div>
 
           <button type="submit" class="submit-btn">登录</button>
@@ -62,11 +62,50 @@
         </form>
       </div>
     </div>
+
+    <!-- 忘记密码弹窗 -->
+    <div class="forgot-modal-overlay" v-if="showForgotPassword" @click.self="closeForgotModal">
+      <div class="forgot-modal">
+        <div class="forgot-header">
+          <h3>重置密码</h3>
+          <button class="close-btn" @click="closeForgotModal">&times;</button>
+        </div>
+        <form class="forgot-form" @submit.prevent="handleResetPassword">
+          <div class="form-group">
+            <label for="forgot-email">邮箱</label>
+            <input type="email" id="forgot-email" v-model="forgotForm.email" placeholder="请输入注册时的邮箱" required />
+          </div>
+          <div class="form-group">
+            <label for="forgot-code">验证码</label>
+            <div class="code-input-wrapper">
+              <input type="text" id="forgot-code" v-model="forgotForm.code" placeholder="请输入验证码" required />
+              <button type="button" class="send-code-btn" :disabled="forgotCountdown > 0" @click="sendForgotCode">
+                {{ forgotCountdown > 0 ? `${forgotCountdown}s后重发` : '发送验证码' }}
+              </button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="new-password">新密码</label>
+            <input type="password" id="new-password" v-model="forgotForm.newPassword" placeholder="请输入新密码（至少6位）"
+              required />
+          </div>
+          <div class="form-group">
+            <label for="confirm-password">确认密码</label>
+            <input type="password" id="confirm-password" v-model="forgotForm.confirmPassword" placeholder="请再次输入新密码"
+              required />
+          </div>
+          <button type="submit" class="submit-btn" :disabled="resetLoading">
+            {{ resetLoading ? '重置中...' : '重置密码' }}
+          </button>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import API_BASE_URL from '@/config/api'
+import { http } from '@/utils/request'
+import { getRandomBg, getFallbackBg } from '@/utils/randomBg'
 
 export default {
   name: 'LoginPage',
@@ -80,13 +119,31 @@ export default {
         password: '',
         code: '',
         rememberMe: false
-      }
+      },
+      // 忘记密码相关
+      showForgotPassword: false,
+      forgotCountdown: 0,
+      forgotTimer: null,
+      resetLoading: false,
+      forgotForm: {
+        email: '',
+        code: '',
+        newPassword: '',
+        confirmPassword: ''
+      },
+      bgImage: ''
     }
+  },
+  mounted() {
+    this.bgImage = getRandomBg('login')
   },
   beforeDestroy() {
     // 清除定时器
     if (this.timer) {
       clearInterval(this.timer)
+    }
+    if (this.forgotTimer) {
+      clearInterval(this.forgotTimer)
     }
   },
   methods: {
@@ -103,26 +160,12 @@ export default {
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/user/login`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include',  // 重要：允许跨域携带 Cookie
-          body: JSON.stringify(requestData)
-        })
-        const result = await response.json()
-
-        if (result.code === 200) {
-          // 存储用户信息到 localStorage（不存密码）
-          localStorage.setItem('user', JSON.stringify(result.data))
-          this.$router.push('/')
-        } else {
-          alert(result.message || '登录失败')
-        }
+        const res = await http.post('/api/user/login', requestData)
+        localStorage.setItem('user', JSON.stringify(res.data))
+        this.$router.push('/')
       } catch (error) {
         console.error('登录失败：', error)
-        alert('登录失败，请检查网络')
+        alert(error.message || '登录失败，请检查网络')
       }
     },
     async sendCode() {
@@ -138,33 +181,97 @@ export default {
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/user/sendCode?email=${encodeURIComponent(this.loginForm.email)}`, {
-          method: 'POST',
-          credentials: 'include'
-        })
-        const result = await response.json()
-
-        if (result.code === 200) {
-          alert('验证码已发送到您的邮箱')
-          // 开始倒计时
-          this.countdown = 60
-          this.timer = setInterval(() => {
-            this.countdown--
-            if (this.countdown <= 0) {
-              clearInterval(this.timer)
-              this.timer = null
-            }
-          }, 1000)
-        } else {
-          alert(result.message || '发送失败')
-        }
+        await http.post(`/api/user/sendCode?email=${encodeURIComponent(this.loginForm.email)}`)
+        alert('验证码已发送到您的邮箱')
+        this.countdown = 60
+        this.timer = setInterval(() => {
+          this.countdown--
+          if (this.countdown <= 0) {
+            clearInterval(this.timer)
+            this.timer = null
+          }
+        }, 1000)
       } catch (error) {
         console.error('发送验证码失败：', error)
-        alert('发送验证码失败，请检查网络')
+        alert(error.message || '发送验证码失败')
       }
     },
     goToRegister() {
       this.$router.push('/register')
+    },
+    // 忘记密码相关方法
+    closeForgotModal() {
+      this.showForgotPassword = false
+      this.forgotForm = {
+        email: '',
+        code: '',
+        newPassword: '',
+        confirmPassword: ''
+      }
+    },
+    async sendForgotCode() {
+      if (!this.forgotForm.email) {
+        alert('请先输入邮箱')
+        return
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(this.forgotForm.email)) {
+        alert('请输入正确的邮箱格式')
+        return
+      }
+
+      try {
+        await http.post(`/api/user/sendCode?email=${encodeURIComponent(this.forgotForm.email)}`)
+        alert('验证码已发送到您的邮箱')
+        this.forgotCountdown = 60
+        this.forgotTimer = setInterval(() => {
+          this.forgotCountdown--
+          if (this.forgotCountdown <= 0) {
+            clearInterval(this.forgotTimer)
+            this.forgotTimer = null
+          }
+        }, 1000)
+      } catch (error) {
+        console.error('发送验证码失败：', error)
+        alert(error.message || '发送验证码失败')
+      }
+    },
+    async handleResetPassword() {
+      // 验证表单
+      if (!this.forgotForm.email || !this.forgotForm.code || !this.forgotForm.newPassword || !this.forgotForm.confirmPassword) {
+        alert('请填写完整信息')
+        return
+      }
+      if (this.forgotForm.newPassword.length < 6) {
+        alert('密码长度不能少于6位')
+        return
+      }
+      if (this.forgotForm.newPassword !== this.forgotForm.confirmPassword) {
+        alert('两次输入的密码不一致')
+        return
+      }
+
+      this.resetLoading = true
+      try {
+        await http.post('/api/user/resetPassword', {
+          email: this.forgotForm.email,
+          code: this.forgotForm.code,
+          newPassword: this.forgotForm.newPassword
+        })
+        alert('密码重置成功，请使用新密码登录')
+        this.closeForgotModal()
+        // 自动填充邮箱到登录表单
+        this.loginForm.email = this.forgotForm.email
+        this.loginType = 'password'
+      } catch (error) {
+        console.error('重置密码失败：', error)
+        alert(error.message || '重置密码失败')
+      } finally {
+        this.resetLoading = false
+      }
+    },
+    handleBgError() {
+      this.bgImage = getFallbackBg(this.bgImage, 'login')
     }
   }
 }
@@ -399,5 +506,84 @@ export default {
 
 .register-link a:hover {
   text-decoration: underline;
+}
+
+/* 忘记密码弹窗 */
+.forgot-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100;
+}
+
+.forgot-modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 30px;
+  width: 400px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.forgot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.forgot-header h3 {
+  font-size: 20px;
+  color: #333;
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #999;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  transition: color 0.3s;
+}
+
+.close-btn:hover {
+  color: #ff69b4;
+}
+
+.forgot-form .form-group {
+  margin-bottom: 18px;
+}
+
+.forgot-form .submit-btn {
+  margin-top: 10px;
+}
+
+.forgot-form .submit-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 </style>

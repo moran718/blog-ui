@@ -5,36 +5,69 @@
         <!-- 左侧留空 -->
         <div class="nav-left"></div>
 
+        <!-- 移动端汉堡菜单按钮 -->
+        <button class="mobile-menu-btn" @click="toggleMobileMenu" :class="{ active: mobileMenuOpen }">
+          <span class="hamburger-line"></span>
+          <span class="hamburger-line"></span>
+          <span class="hamburger-line"></span>
+        </button>
+
         <!-- 中间导航菜单靠右 -->
-        <ul class="nav-list">
-          <li class="nav-item" :class="{ active: activeIndex === 0 }" @click="goTo('/', 0)">
-            <a href="#">
+        <ul class="nav-list" :class="{ 'mobile-open': mobileMenuOpen }">
+          <li class="nav-item" :class="{ active: activeIndex === 0 }" @click="goTo('/', 0); closeMobileMenu()"
+            @mouseenter="preloadPage('home')">
+            <a href="javascript:void(0)">
               <span class="nav-icon">🏠</span>
               首页
             </a>
           </li>
-          <li class="nav-item" :class="{ active: activeIndex === 1 }" @click="handleEssayClick">
+          <li class="nav-item" :class="{ active: activeIndex === 1 }" @click="handleEssayClick(); closeMobileMenu()"
+            @mouseenter="preloadPage('essay')">
             <a href="javascript:void(0)">
               <span class="nav-icon">✏️</span>
               随笔
             </a>
           </li>
-          <li class="nav-item" :class="{ active: activeIndex === 2 }" @click="handleRecordClick">
+          <li class="nav-item" :class="{ active: activeIndex === 2 }" @click="handleRecordClick(); closeMobileMenu()"
+            @mouseenter="preloadPage('record')">
             <a href="javascript:void(0)">
               <span class="nav-icon">📅</span>
               记录
             </a>
           </li>
-          <li class="nav-item" :class="{ active: activeIndex === 3 }" @click="handleMessageClick">
+          <li class="nav-item" :class="{ active: activeIndex === 3 }" @click="handleMessageClick(); closeMobileMenu()"
+            @mouseenter="preloadPage('message')">
             <a href="javascript:void(0)">
               <span class="nav-icon">💬</span>
               留言
             </a>
           </li>
+          <li class="nav-item" :class="{ active: activeIndex === 4 }" @click="handleMusicClick(); closeMobileMenu()"
+            @mouseenter="preloadPage('music')">
+            <a href="javascript:void(0)">
+              <span class="nav-icon">🎵</span>
+              音乐
+            </a>
+          </li>
+          <li class="nav-item" :class="{ active: activeIndex === 5 }" @click="handleArchiveClick(); closeMobileMenu()"
+            @mouseenter="preloadPage('archive')">
+            <a href="javascript:void(0)">
+              <span class="nav-icon">📚</span>
+              归档
+            </a>
+          </li>
         </ul>
 
-        <!-- 右侧登录按钮/用户头像 -->
+        <!-- 右侧搜索和登录按钮/用户头像 -->
         <div class="user-section">
+          <!-- 搜索按钮 -->
+          <button class="search-btn" @click="openSearch" title="搜索">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+          </button>
+
           <div v-if="isLoggedIn" class="user-avatar-wrapper">
             <div class="user-avatar" @click="handleUserClick">
               <img :src="userAvatar" alt="用户头像" />
@@ -52,8 +85,13 @@
       </div>
     </nav>
 
-    <!-- 回到顶部小火箭（随笔页面不显示） -->
-    <div class="rocket-btn" v-show="isNavHidden && $route.path !== '/essay'" @click="scrollToTop">
+    <!-- 搜索弹窗 -->
+    <SearchModal :visible="showSearch" @close="closeSearch" />
+
+    <!-- 回到顶部小火箭（随笔、记录、留言、音乐、归档页面不显示，它们有自己的返回按钮） -->
+    <div class="rocket-btn"
+      v-show="isNavHidden && !['/essay', '/record', '/message', '/music', '/archive'].includes($route.path)"
+      @click="scrollToTop">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path>
         <path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z">
@@ -123,10 +161,15 @@
 </template>
 
 <script>
-import API_BASE_URL from '@/config/api'
+import { http } from '@/utils/request'
+import { preloadBg } from '@/utils/randomBg'
+import SearchModal from './SearchModal.vue'
 
 export default {
   name: 'NavBar',
+  components: {
+    SearchModal
+  },
   data() {
     return {
       activeIndex: 0,
@@ -134,7 +177,10 @@ export default {
       userAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=user',
       isNavHidden: false,
       isSnowActive: false,
-      isDarkTheme: false
+      isDarkTheme: false,
+      showSearch: false,
+      preloadedPages: {}, // 记录已预加载的页面
+      mobileMenuOpen: false // 移动端菜单状态
     }
   },
   mounted() {
@@ -150,16 +196,48 @@ export default {
     window.removeEventListener('scroll', this.handleScroll)
   },
   watch: {
-    '$route.path'() {
-      // 路由变化时重新检查
-      this.$nextTick(() => {
-        this.handleScroll()
-        this.checkLoginStatus()
+    '$route.path': {
+      immediate: true,
+      handler(newPath) {
+        // 路由变化时立即更新激活状态
         this.updateActiveIndex()
-      })
+
+        // 判断是否是详情页（需要动态显示导航栏）
+        const detailPages = ['/record/']
+        const isDetailPage = detailPages.some(p => newPath.startsWith(p))
+
+        if (isDetailPage) {
+          // 详情页：先隐藏，延迟后显示（避免与列表页导航栏重叠）
+          this.isNavHidden = true
+          setTimeout(() => {
+            this.isNavHidden = false
+          }, 300)
+        } else {
+          // 其他页面通过 nextTick 检测
+          this.$nextTick(() => {
+            this.handleScroll()
+          })
+        }
+
+        this.checkLoginStatus()
+      }
     }
   },
   methods: {
+    // 预加载页面背景图
+    preloadPage(pageName) {
+      // 避免重复预加载
+      if (this.preloadedPages[pageName]) return
+
+      // 标记为已预加载
+      this.preloadedPages[pageName] = true
+
+      // 预加载背景图
+      preloadBg(pageName)
+
+      // 显示预加载提示（可选，调试用）
+      console.log(`🚀 预加载: ${pageName} 页面资源`)
+    },
     handleScroll() {
       const path = this.$route.path
 
@@ -180,6 +258,50 @@ export default {
         const essayHeader = document.getElementById('essay-content-header')
         // 检测 essay-content-header 是否存在且可见（v-show 控制）
         if (essayHeader && essayHeader.offsetParent !== null) {
+          this.isNavHidden = true
+        } else {
+          this.isNavHidden = false
+        }
+        return
+      }
+
+      // 记录页：当内容展示时隐藏导航栏
+      if (path === '/record') {
+        const recordHeader = document.getElementById('record-content-header')
+        if (recordHeader && recordHeader.offsetParent !== null) {
+          this.isNavHidden = true
+        } else {
+          this.isNavHidden = false
+        }
+        return
+      }
+
+      // 留言页：当内容展示时隐藏导航栏
+      if (path === '/message') {
+        const messageHeader = document.getElementById('message-content-header')
+        if (messageHeader && messageHeader.offsetParent !== null) {
+          this.isNavHidden = true
+        } else {
+          this.isNavHidden = false
+        }
+        return
+      }
+
+      // 音乐页：当内容展示时隐藏导航栏
+      if (path === '/music') {
+        const musicHeader = document.getElementById('music-content-header')
+        if (musicHeader && musicHeader.offsetParent !== null) {
+          this.isNavHidden = true
+        } else {
+          this.isNavHidden = false
+        }
+        return
+      }
+
+      // 归档页：当内容展示时隐藏导航栏
+      if (path === '/archive') {
+        const archiveHeader = document.getElementById('archive-content-header')
+        if (archiveHeader && archiveHeader.offsetParent !== null) {
           this.isNavHidden = true
         } else {
           this.isNavHidden = false
@@ -236,19 +358,25 @@ export default {
         this.$router.push('/record')
       }
     },
+    handleMusicClick() {
+      this.setActive(4)
+      if (this.$route.path !== '/music') {
+        this.$router.push('/music')
+      }
+    },
+    handleArchiveClick() {
+      this.setActive(5)
+      if (this.$route.path !== '/archive') {
+        this.$router.push('/archive')
+      }
+    },
     async checkLoginStatus() {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/user/info`, {
-          method: 'GET',
-          credentials: 'include'  // 携带 Cookie
-        })
-        const result = await response.json()
-
-        if (result.code === 200 && result.data) {
+        const res = await http.get('/api/user/info')
+        if (res.data) {
           this.isLoggedIn = true
-          this.userAvatar = result.data.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=user'
-          // 更新 localStorage
-          localStorage.setItem('user', JSON.stringify(result.data))
+          this.userAvatar = res.data.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=user'
+          localStorage.setItem('user', JSON.stringify(res.data))
         } else {
           this.isLoggedIn = false
           localStorage.removeItem('user')
@@ -256,21 +384,18 @@ export default {
       } catch (error) {
         console.error('检查登录状态失败：', error)
         this.isLoggedIn = false
+        localStorage.removeItem('user')
       }
     },
     async handleLogout() {
       try {
-        await fetch(`${API_BASE_URL}/api/user/logout`, {
-          method: 'POST',
-          credentials: 'include'
-        })
+        await http.post('/api/user/logout')
       } catch (error) {
         console.error('登出请求失败：', error)
       }
 
       this.isLoggedIn = false
       localStorage.removeItem('user')
-      // 如果在需要登录的页面，跳转到首页
       if (this.$route.path !== '/') {
         this.$router.push('/')
       }
@@ -300,11 +425,41 @@ export default {
         '/essay': 1,
         '/record': 2,
         '/message': 3,
+        '/music': 4,
+        '/archive': 5,
       }
       if (path in routeIndexMap) {
         this.activeIndex = routeIndexMap[path]
+      } else if (path.startsWith('/record/')) {
+        // 文章详情页面，显示"记录"为活动状态
+        this.activeIndex = 2
+      }
+    },
+    openSearch() {
+      this.showSearch = true
+    },
+    closeSearch() {
+      this.showSearch = false
+    },
+    toggleMobileMenu() {
+      this.mobileMenuOpen = !this.mobileMenuOpen
+    },
+    closeMobileMenu() {
+      this.mobileMenuOpen = false
+    }
+  },
+  created() {
+    // 监听键盘快捷键 Ctrl+K 或 Cmd+K 打开搜索
+    const handleKeydown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        this.openSearch()
       }
     }
+    window.addEventListener('keydown', handleKeydown)
+    this.$once('hook:beforeDestroy', () => {
+      window.removeEventListener('keydown', handleKeydown)
+    })
   }
 }
 </script>
@@ -395,6 +550,39 @@ export default {
 /* 用户区域 */
 .user-section {
   margin-left: 30px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+/* 搜索按钮 */
+.search-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.search-btn svg {
+  width: 20px;
+  height: 20px;
+  stroke: #fff;
+  transition: stroke 0.3s ease;
+}
+
+.search-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.1);
+}
+
+.search-btn:hover svg {
+  stroke: #42b983;
 }
 
 /* 登录按钮 - 圆形粉红色 */
@@ -746,6 +934,206 @@ export default {
     top: 100%;
     transform: translateX(100px) rotate(360deg);
     opacity: 0.3;
+  }
+}
+
+/* 移动端汉堡菜单按钮 */
+.mobile-menu-btn {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  z-index: 1001;
+}
+
+.hamburger-line {
+  width: 24px;
+  height: 3px;
+  background: #fff;
+  border-radius: 2px;
+  transition: all 0.3s ease;
+  margin: 2px 0;
+}
+
+.mobile-menu-btn.active .hamburger-line:nth-child(1) {
+  transform: rotate(45deg) translate(5px, 5px);
+}
+
+.mobile-menu-btn.active .hamburger-line:nth-child(2) {
+  opacity: 0;
+}
+
+.mobile-menu-btn.active .hamburger-line:nth-child(3) {
+  transform: rotate(-45deg) translate(5px, -5px);
+}
+
+/* 响应式布局 - 平板 */
+@media (max-width: 992px) {
+  .nav-container {
+    padding: 10px 20px;
+  }
+
+  .nav-item {
+    margin: 0 5px;
+    padding: 10px 12px;
+  }
+
+  .nav-item a {
+    font-size: 14px;
+  }
+
+  .user-section {
+    margin-left: 15px;
+  }
+
+  .login-btn,
+  .user-avatar {
+    width: 42px;
+    height: 42px;
+    font-size: 12px;
+  }
+
+  .search-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .rocket-btn,
+  .settings-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .rocket-btn {
+    right: 20px;
+    bottom: 90px;
+  }
+
+  .settings-wrapper {
+    right: 20px;
+    bottom: 35px;
+  }
+}
+
+/* 响应式布局 - 手机 */
+@media (max-width: 768px) {
+  .mobile-menu-btn {
+    display: flex;
+  }
+
+  .nav-left {
+    display: none;
+  }
+
+  .nav-list {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: rgba(30, 30, 40, 0.98);
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 1000;
+  }
+
+  .nav-list.mobile-open {
+    transform: translateX(0);
+  }
+
+  .nav-item {
+    margin: 5px 0;
+    padding: 15px 30px;
+  }
+
+  .nav-item a {
+    font-size: 18px;
+  }
+
+  .nav-icon {
+    font-size: 22px;
+    margin-right: 10px;
+  }
+
+  .user-section {
+    margin-left: auto;
+    gap: 10px;
+  }
+
+  .login-btn,
+  .user-avatar {
+    width: 38px;
+    height: 38px;
+    font-size: 11px;
+  }
+
+  .search-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .search-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .user-dropdown {
+    right: -10px;
+  }
+
+  .rocket-btn {
+    width: 44px;
+    height: 44px;
+    right: 15px;
+    bottom: 80px;
+  }
+
+  .rocket-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .settings-wrapper {
+    right: 15px;
+    bottom: 25px;
+  }
+
+  .settings-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .gear-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .settings-menu {
+    right: 55px;
+  }
+
+  .settings-wrapper:hover .settings-menu {
+    right: 55px;
+  }
+
+  .menu-item {
+    width: 36px;
+    height: 36px;
+  }
+
+  .menu-item svg {
+    width: 18px;
+    height: 18px;
   }
 }
 </style>

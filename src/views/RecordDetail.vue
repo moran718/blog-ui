@@ -1,10 +1,11 @@
 <template>
   <div class="record-detail-page">
+    <!-- 导航栏 -->
     <NavBar />
 
     <!-- 全屏背景图 -->
     <div class="page-background">
-      <img src="../../image/wallhaven-7jp8qy.jpg" alt="背景图" class="bg-image" />
+      <img :src="bgImage" alt="背景图" class="bg-image" @error="handleBgError" />
     </div>
 
     <!-- 加载状态 -->
@@ -22,6 +23,38 @@
 
     <!-- 文章内容 -->
     <div v-else class="content-wrapper">
+      <!-- 文章目录侧边栏 -->
+      <aside class="toc-sidebar" :class="{ 'toc-visible': tocVisible }">
+        <div class="toc-header">
+          <span class="toc-icon">📑</span>
+          <span class="toc-title">文章目录</span>
+          <button class="toc-fab" @click="tocVisible = !tocVisible">
+            {{ tocVisible ? '✕' : '☰' }}
+          </button>
+        </div>
+        <nav class="toc-nav" v-show="tocVisible">
+          <ul class="toc-list">
+            <li v-for="(item, index) in tocList" :key="index" class="toc-item" :class="{
+              'toc-active': activeHeading === item.id,
+              [`toc-level-${item.level}`]: true
+            }" @click="scrollToHeading(item.id)">
+              <span class="toc-dot"></span>
+              <span class="toc-text">{{ item.text }}</span>
+            </li>
+          </ul>
+          <div v-if="tocList.length === 0" class="toc-empty">
+            暂无目录
+          </div>
+        </nav>
+        <!-- 阅读进度 -->
+        <div class="reading-progress" v-show="tocVisible">
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ height: readingProgress + '%' }"></div>
+          </div>
+          <span class="progress-text">{{ Math.round(readingProgress) }}%</span>
+        </div>
+      </aside>
+
       <article class="article-container">
         <!-- 文章头部 -->
         <header class="article-header">
@@ -83,6 +116,9 @@
       </article>
     </div>
 
+    <!-- 页脚 -->
+    <Footer minimal />
+
     <!-- 图片预览弹窗 -->
     <div class="image-preview-overlay" v-if="previewImage" @click="closePreview">
       <div class="preview-container">
@@ -96,13 +132,13 @@
 
 <script>
 import NavBar from '@/components/NavBar.vue'
+import Footer from '@/components/Footer.vue'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 
-import API_BASE_URL from '@/config/api'
-
-const API_BASE = API_BASE_URL
+import { http } from '@/utils/request'
+import { getRandomBg, getFallbackBg } from '@/utils/randomBg'
 
 // 配置 marked
 marked.setOptions({
@@ -123,7 +159,8 @@ marked.setOptions({
 export default {
   name: 'RecordDetail',
   components: {
-    NavBar
+    NavBar,
+    Footer
   },
   data() {
     return {
@@ -131,7 +168,13 @@ export default {
       loading: true,
       error: null,
       hasLiked: false,
-      previewImage: null
+      previewImage: null,
+      // 目录相关
+      tocList: [],
+      tocVisible: true,
+      activeHeading: null,
+      readingProgress: 0,
+      bgImage: ''
     }
   },
   computed: {
@@ -141,8 +184,13 @@ export default {
     }
   },
   mounted() {
+    this.bgImage = getRandomBg('record-detail')
     this.loadRecord()
     this.checkLiked()
+    window.addEventListener('scroll', this.handleScroll, { passive: true })
+  },
+  beforeDestroy() {
+    window.removeEventListener('scroll', this.handleScroll)
   },
   methods: {
     async loadRecord() {
@@ -151,19 +199,14 @@ export default {
       const id = this.$route.params.id
 
       try {
-        const response = await fetch(`${API_BASE}/api/record/${id}`, {
-          credentials: 'include'
+        const res = await http.get(`/api/record/${id}`)
+        this.record = res.data
+        this.$nextTick(() => {
+          this.generateToc()
         })
-        const result = await response.json()
-
-        if (result.code === 200) {
-          this.record = result.data
-        } else {
-          this.error = result.message || '加载失败'
-        }
       } catch (err) {
         console.error('加载记录失败:', err)
-        this.error = '网络错误，请稍后重试'
+        this.error = err.message || '加载失败'
       } finally {
         this.loading = false
       }
@@ -171,13 +214,8 @@ export default {
     async checkLiked() {
       const id = this.$route.params.id
       try {
-        const response = await fetch(`${API_BASE}/api/record/${id}/liked`, {
-          credentials: 'include'
-        })
-        const result = await response.json()
-        if (result.code === 200) {
-          this.hasLiked = result.data
-        }
+        const res = await http.get(`/api/record/${id}/liked`)
+        this.hasLiked = res.data
       } catch (err) {
         console.error('检查点赞状态失败:', err)
       }
@@ -185,15 +223,9 @@ export default {
     async toggleLike() {
       const id = this.$route.params.id
       try {
-        const response = await fetch(`${API_BASE}/api/record/${id}/like`, {
-          method: 'POST',
-          credentials: 'include'
-        })
-        const result = await response.json()
-        if (result.code === 200) {
-          this.hasLiked = result.data.liked
-          this.record.likes = result.data.likes
-        }
+        const res = await http.post(`/api/record/${id}/like`)
+        this.hasLiked = res.data.liked
+        this.record.likes = res.data.likes
       } catch (err) {
         console.error('点赞失败:', err)
       }
@@ -219,6 +251,62 @@ export default {
     // 关闭图片预览
     closePreview() {
       this.previewImage = null
+    },
+    // 生成目录
+    generateToc() {
+      this.$nextTick(() => {
+        const contentEl = document.querySelector('.article-content')
+        if (!contentEl) return
+
+        const headings = contentEl.querySelectorAll('h1, h2, h3, h4, h5, h6')
+        const tocItems = []
+
+        headings.forEach((heading, index) => {
+          // 为每个标题添加 id
+          const id = `heading-${index}`
+          heading.id = id
+
+          tocItems.push({
+            id,
+            text: heading.textContent,
+            level: parseInt(heading.tagName.charAt(1))
+          })
+        })
+
+        this.tocList = tocItems
+      })
+    },
+    // 滚动到指定标题
+    scrollToHeading(id) {
+      const element = document.getElementById(id)
+      if (element) {
+        const offset = 80 // 导航栏高度
+        const top = element.getBoundingClientRect().top + window.scrollY - offset
+        window.scrollTo({ top, behavior: 'smooth' })
+      }
+    },
+    // 处理滚动事件
+    handleScroll() {
+      // 更新阅读进度
+      const scrollTop = window.scrollY
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight
+      this.readingProgress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0
+
+      // 更新当前激活的标题
+      const headings = document.querySelectorAll('.article-content h1, .article-content h2, .article-content h3, .article-content h4, .article-content h5, .article-content h6')
+      let currentHeading = null
+
+      headings.forEach(heading => {
+        const rect = heading.getBoundingClientRect()
+        if (rect.top <= 100) {
+          currentHeading = heading.id
+        }
+      })
+
+      this.activeHeading = currentHeading
+    },
+    handleBgError() {
+      this.bgImage = getFallbackBg(this.bgImage, 'record-detail')
     }
   }
 }
@@ -283,6 +371,257 @@ export default {
   color: #fff;
   font-size: 18px;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ========== 文章目录侧边栏 ========== */
+.toc-sidebar {
+  position: fixed;
+  right: 20px;
+  top: 100px;
+  width: 260px;
+  max-height: calc(100vh - 140px);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.toc-header {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.toc-icon {
+  font-size: 18px;
+  margin-right: 8px;
+}
+
+.toc-title {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.toc-nav {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 10px 0;
+}
+
+.toc-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.toc-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.toc-item:hover {
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.toc-item.toc-active {
+  background: rgba(102, 126, 234, 0.15);
+}
+
+.toc-item.toc-active .toc-dot {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  transform: scale(1.3);
+  box-shadow: 0 0 8px rgba(102, 126, 234, 0.5);
+}
+
+.toc-item.toc-active .toc-text {
+  color: #667eea;
+  font-weight: 600;
+}
+
+.toc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ccc;
+  margin-right: 12px;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.toc-text {
+  font-size: 14px;
+  color: #555;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.3s;
+}
+
+/* 目录层级缩进 */
+.toc-level-1 {
+  padding-left: 20px;
+}
+
+.toc-level-2 {
+  padding-left: 32px;
+}
+
+.toc-level-3 {
+  padding-left: 44px;
+}
+
+.toc-level-4 {
+  padding-left: 56px;
+}
+
+.toc-level-5 {
+  padding-left: 68px;
+}
+
+.toc-level-6 {
+  padding-left: 80px;
+}
+
+.toc-level-1 .toc-text {
+  font-weight: 600;
+}
+
+.toc-level-2 .toc-text {
+  font-weight: 500;
+}
+
+.toc-empty {
+  padding: 20px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+}
+
+/* 阅读进度 */
+.reading-progress {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: #eee;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-right: 12px;
+}
+
+.progress-fill {
+  width: 100%;
+  background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+  border-radius: 3px;
+  transition: height 0.1s ease;
+}
+
+.progress-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #667eea;
+  min-width: 40px;
+  text-align: right;
+}
+
+/* 目录切换按钮 */
+.toc-fab {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.toc-fab:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
+}
+
+/* 暗黑主题 */
+.dark-theme .toc-sidebar {
+  background: rgba(30, 30, 50, 0.95);
+}
+
+.dark-theme .toc-header {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-theme .toc-item:hover {
+  background: rgba(102, 126, 234, 0.2);
+}
+
+.dark-theme .toc-text {
+  color: #bbb;
+}
+
+.dark-theme .toc-item.toc-active .toc-text {
+  color: #a78bfa;
+}
+
+.dark-theme .reading-progress {
+  border-top-color: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.dark-theme .progress-bar {
+  background: #333;
+}
+
+/* 响应式 - 小屏幕调整侧边栏 */
+@media (max-width: 1400px) {
+  .toc-sidebar {
+    width: 220px;
+    right: 10px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .toc-sidebar {
+    width: 200px;
+    right: 5px;
+    top: 80px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .toc-sidebar {
+    display: none;
+  }
+
+  .toc-sidebar.toc-visible {
+    display: block;
+    position: fixed;
+    right: 10px;
+    top: 80px;
+    width: 260px;
+    max-height: 70vh;
+  }
 }
 
 /* 内容区域 */
@@ -778,6 +1117,111 @@ export default {
   .preview-image {
     max-width: 95vw;
     border-radius: 8px;
+  }
+}
+
+/* 响应式布局 - 手机 */
+@media (max-width: 576px) {
+  .content-wrapper {
+    padding: 70px 10px 20px;
+  }
+
+  .article-card {
+    border-radius: 12px;
+  }
+
+  .article-header,
+  .article-content,
+  .article-footer {
+    padding: 15px;
+  }
+
+  .article-title {
+    font-size: 20px;
+    line-height: 1.4;
+  }
+
+  .article-meta {
+    gap: 8px;
+    font-size: 12px;
+    flex-wrap: wrap;
+  }
+
+  .article-content {
+    font-size: 15px;
+    line-height: 1.8;
+  }
+
+  .article-content :deep(img) {
+    max-width: 100%;
+    margin: 1em auto;
+  }
+
+  .article-content :deep(pre) {
+    padding: 12px;
+    font-size: 12px;
+    border-radius: 8px;
+  }
+
+  .article-content :deep(code) {
+    font-size: 13px;
+  }
+
+  .article-content :deep(h1) {
+    font-size: 22px;
+  }
+
+  .article-content :deep(h2) {
+    font-size: 20px;
+  }
+
+  .article-content :deep(h3) {
+    font-size: 18px;
+  }
+
+  .article-content :deep(blockquote) {
+    padding: 10px 15px;
+    margin: 15px 0;
+  }
+
+  .action-btn {
+    padding: 10px 15px;
+    font-size: 13px;
+  }
+
+  .action-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .tag-list {
+    gap: 6px;
+  }
+
+  .tag-item {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+}
+
+/* 响应式布局 - 超小屏幕 */
+@media (max-width: 375px) {
+  .content-wrapper {
+    padding: 65px 8px 15px;
+  }
+
+  .article-header,
+  .article-content,
+  .article-footer {
+    padding: 12px;
+  }
+
+  .article-title {
+    font-size: 18px;
+  }
+
+  .article-content {
+    font-size: 14px;
   }
 }
 </style>

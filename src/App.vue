@@ -1,20 +1,33 @@
 <template>
   <div id="app" @click="handleClick">
-    <NavBar />
+    <!-- 页面滚动进度条 -->
+    <div class="scroll-progress-bar" :style="{ width: scrollProgress + '%' }"></div>
+    <!-- 页面加载动画 -->
+    <PageLoading :show="isLoading" :progress="loadingProgress" />
     <router-view />
+    <!-- 全局音乐播放器 -->
+    <GlobalMusicPlayer />
   </div>
 </template>
 
 <script>
-import NavBar from './components/NavBar.vue'
+import PageLoading from './components/PageLoading.vue'
+import GlobalMusicPlayer from './components/GlobalMusicPlayer.vue'
+import { loadingBus } from './utils/pageLoader'
+import { http } from './utils/request'
+import { loadMusicList } from './utils/musicPlayer'
 
 export default {
   name: 'App',
   components: {
-    NavBar
+    PageLoading,
+    GlobalMusicPlayer
   },
   data() {
     return {
+      isLoading: false,
+      loadingProgress: 0,
+      scrollProgress: 0,
       // 社会主义核心价值观
       coreValues: [
         '富强', '民主', '文明', '和谐',
@@ -31,7 +44,29 @@ export default {
       currentIndex: 0
     }
   },
+  mounted() {
+    // 监听加载状态变化
+    loadingBus.$on('loading-change', ({ isLoading, progress }) => {
+      this.isLoading = isLoading
+      this.loadingProgress = progress
+    })
+    // 监听滚动事件更新进度条
+    window.addEventListener('scroll', this.updateScrollProgress)
+    // 记录网站访问
+    this.recordSiteVisit()
+    // 加载音乐列表
+    loadMusicList()
+  },
+  beforeDestroy() {
+    loadingBus.$off('loading-change')
+    window.removeEventListener('scroll', this.updateScrollProgress)
+  },
   methods: {
+    updateScrollProgress() {
+      const scrollTop = window.scrollY || document.documentElement.scrollTop
+      const scrollHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight
+      this.scrollProgress = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 0
+    },
     handleClick(event) {
       // 创建文字元素
       const text = document.createElement('span')
@@ -55,6 +90,16 @@ export default {
           text.parentNode.removeChild(text)
         }
       }, 1500)
+    },
+    recordSiteVisit() {
+      // 使用 sessionStorage 避免同一会话重复记录
+      if (!sessionStorage.getItem('visited')) {
+        http.post('/api/user/visit').then(() => {
+          sessionStorage.setItem('visited', '1')
+        }).catch(() => {
+          // 忽略错误
+        })
+      }
     }
   }
 }
@@ -291,7 +336,7 @@ html.dark-theme * {
   bottom: 5px;
   width: 100px;
   height: 100px;
-  background-image: url('../image/lm.png');
+  background-image: url('./assets/lm.png');
   background-size: contain;
   background-repeat: no-repeat;
   background-position: right bottom;
@@ -359,5 +404,157 @@ html.dark-theme * {
 
 .dark-theme .decorated-input-area::before {
   opacity: 0.5;
+}
+
+/* ========== 页面滚动进度条 ========== */
+.scroll-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #ff6b6b, #feca57, #48dbfb, #ff9ff3, #54a0ff, #5f27cd);
+  background-size: 300% 100%;
+  animation: progressGradient 3s linear infinite;
+  z-index: 99999;
+  transition: width 0.1s ease-out;
+  box-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+}
+
+@keyframes progressGradient {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  100% {
+    background-position: 300% 50%;
+  }
+}
+
+/* ========== 毛玻璃卡片悬浮效果 ========== */
+.glass-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.glass-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.dark-theme .glass-card {
+  background: rgba(30, 30, 50, 0.85);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.dark-theme .glass-card:hover {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* ========== 渐变边框动画输入框 ========== */
+.gradient-border-input {
+  position: relative;
+  border-radius: 12px;
+  padding: 2px;
+  background: linear-gradient(135deg, #667eea, #764ba2, #ff6b6b, #feca57);
+  background-size: 300% 300%;
+  animation: gradientBorderIdle 8s ease infinite;
+}
+
+.gradient-border-input:focus-within {
+  animation: gradientBorderActive 2s ease infinite;
+}
+
+.gradient-border-input input,
+.gradient-border-input textarea {
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  outline: none;
+  background: #fff;
+}
+
+.dark-theme .gradient-border-input input,
+.dark-theme .gradient-border-input textarea {
+  background: #1a1a2e;
+  color: #eee;
+}
+
+@keyframes gradientBorderIdle {
+
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes gradientBorderActive {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* ========== 图片懒加载骨架屏 ========== */
+.skeleton-image {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s infinite;
+}
+
+.dark-theme .skeleton-image {
+  background: linear-gradient(90deg, #2a2a40 25%, #3a3a55 50%, #2a2a40 75%);
+  background-size: 200% 100%;
+}
+
+@keyframes skeletonShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ========== 点击涟漪效果 ========== */
+.ripple-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple-effect::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.3) 10%, transparent 10.01%);
+  background-repeat: no-repeat;
+  background-position: 50%;
+  transform: scale(10, 10);
+  opacity: 0;
+  transition: transform 0.5s, opacity 0.5s;
+}
+
+.ripple-effect:active::after {
+  transform: scale(0, 0);
+  opacity: 1;
+  transition: 0s;
 }
 </style>

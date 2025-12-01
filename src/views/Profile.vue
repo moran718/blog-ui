@@ -1,8 +1,11 @@
 <template>
   <div class="profile-page">
+    <!-- 导航栏 -->
+    <NavBar />
+
     <!-- 背景图片 -->
     <div class="profile-background">
-      <img src="../../image/wallhaven-9oo2k1.jpg" alt="背景图" class="bg-image" />
+      <img src="/image/wallhaven-9oo2k1.jpg" alt="背景图" class="bg-image" />
     </div>
 
     <!-- 个人中心卡片 -->
@@ -35,6 +38,14 @@
             <div class="form-value">
               <span class="email-text">{{ userInfo.email }}</span>
               <button type="button" class="modify-btn" @click="showEmailModal = true">修改</button>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label>密码：</label>
+            <div class="form-value">
+              <span class="email-text">******</span>
+              <button type="button" class="modify-btn" @click="showPasswordModal = true">修改</button>
             </div>
           </div>
 
@@ -93,14 +104,45 @@
         </div>
       </div>
     </div>
+
+    <!-- 修改密码弹窗 -->
+    <div class="modal-overlay" v-if="showPasswordModal" @click.self="showPasswordModal = false">
+      <div class="modal-content">
+        <h3>修改密码</h3>
+        <div class="modal-form">
+          <div class="modal-row">
+            <label>旧密码：</label>
+            <input type="password" v-model="passwordForm.oldPassword" placeholder="请输入当前密码" />
+          </div>
+          <div class="modal-row">
+            <label>新密码：</label>
+            <input type="password" v-model="passwordForm.newPassword" placeholder="请输入新密码（至少6位）" />
+          </div>
+          <div class="modal-row">
+            <label>确认密码：</label>
+            <input type="password" v-model="passwordForm.confirmPassword" placeholder="请再次输入新密码" />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="cancel-btn" @click="closePasswordModal">取消</button>
+          <button class="confirm-btn" :disabled="passwordLoading" @click="confirmPasswordChange">
+            {{ passwordLoading ? '修改中...' : '确认' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import API_BASE_URL from '@/config/api'
+import NavBar from '@/components/NavBar.vue'
+import { http } from '@/utils/request'
 
 export default {
   name: 'ProfilePage',
+  components: {
+    NavBar
+  },
   data() {
     return {
       defaultAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=user',
@@ -119,7 +161,15 @@ export default {
       newEmail: '',
       emailCode: '',
       countdown: 0,
-      timer: null
+      timer: null,
+      // 修改密码相关
+      showPasswordModal: false,
+      passwordLoading: false,
+      passwordForm: {
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      }
     }
   },
   mounted() {
@@ -133,34 +183,25 @@ export default {
   methods: {
     async loadUserInfo() {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/user/info`, {
-          method: 'GET',
-          credentials: 'include'
-        })
-        const result = await response.json()
-
-        if (result.code === 200 && result.data) {
+        const res = await http.get('/api/user/info')
+        if (res.data) {
           this.userInfo = {
-            id: result.data.id,
-            username: result.data.username,
-            email: result.data.email,
-            gender: result.data.gender || 0,
-            avatar: result.data.avatar || this.defaultAvatar,
-            bio: result.data.bio || ''
+            id: res.data.id,
+            username: res.data.username,
+            email: res.data.email,
+            gender: res.data.gender || 0,
+            avatar: res.data.avatar || this.defaultAvatar,
+            bio: res.data.bio || ''
           }
-          this.originalUsername = result.data.username // 保存原始用户名
-        } else {
-          alert('请先登录')
-          this.$router.push('/login')
+          this.originalUsername = res.data.username
         }
       } catch (error) {
         console.error('获取用户信息失败：', error)
-        alert('获取用户信息失败')
+        alert('请先登录')
         this.$router.push('/login')
       }
     },
     async checkUsername() {
-      // 如果用户名没变或为空，不检查
       if (!this.userInfo.username || this.userInfo.username === this.originalUsername) {
         this.usernameError = ''
         this.usernameOk = false
@@ -168,14 +209,8 @@ export default {
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/user/checkUsername?username=${encodeURIComponent(this.userInfo.username)}`, {
-          method: 'GET',
-          credentials: 'include'
-        })
-        const result = await response.json()
-
-        if (result.data === true) {
-          // 用户名已存在
+        const res = await http.get('/api/user/checkUsername', { username: this.userInfo.username })
+        if (res.data === true) {
           this.usernameError = '该用户名已被使用'
           this.usernameOk = false
           return false
@@ -192,7 +227,6 @@ export default {
       }
     },
     async handleSubmit() {
-      // 先检查用户名
       if (this.userInfo.username !== this.originalUsername) {
         const isValid = await this.checkUsername()
         if (!isValid) {
@@ -201,32 +235,18 @@ export default {
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/user/update`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            username: this.userInfo.username,
-            gender: this.userInfo.gender,
-            bio: this.userInfo.bio
-          })
+        const res = await http.post('/api/user/update', {
+          username: this.userInfo.username,
+          gender: this.userInfo.gender,
+          bio: this.userInfo.bio
         })
-        const result = await response.json()
-
-        if (result.code === 200) {
-          alert('保存成功')
-          this.originalUsername = this.userInfo.username // 更新原始用户名
-          this.usernameOk = false
-          // 更新本地存储
-          localStorage.setItem('user', JSON.stringify(result.data))
-        } else {
-          alert(result.message || '保存失败')
-        }
+        alert('保存成功')
+        this.originalUsername = this.userInfo.username
+        this.usernameOk = false
+        localStorage.setItem('user', JSON.stringify(res.data))
       } catch (error) {
         console.error('保存失败：', error)
-        alert('保存失败，请检查网络')
+        alert(error.message || '保存失败')
       }
     },
     triggerFileInput() {
@@ -248,29 +268,14 @@ export default {
         return
       }
 
-      // 创建 FormData
-      const formData = new FormData()
-      formData.append('file', file)
-
       try {
-        const response = await fetch(`${API_BASE_URL}/api/user/uploadAvatar`, {
-          method: 'POST',
-          credentials: 'include',
-          body: formData
-        })
-        const result = await response.json()
-
-        if (result.code === 200) {
-          this.userInfo.avatar = result.data
-        } else {
-          alert(result.message || '上传失败')
-        }
+        const res = await http.upload('/api/user/uploadAvatar', file)
+        this.userInfo.avatar = res.data
       } catch (error) {
         console.error('上传失败：', error)
-        alert('上传失败，请检查网络')
+        alert(error.message || '上传失败')
       }
 
-      // 清空 input，允许再次选择同一文件
       event.target.value = ''
     },
     async sendEmailCode() {
@@ -285,27 +290,18 @@ export default {
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/user/sendCode?email=${encodeURIComponent(this.newEmail)}`, {
-          method: 'POST',
-          credentials: 'include'
-        })
-        const result = await response.json()
-
-        if (result.code === 200) {
-          alert('验证码已发送')
-          this.countdown = 60
-          this.timer = setInterval(() => {
-            this.countdown--
-            if (this.countdown <= 0) {
-              clearInterval(this.timer)
-              this.timer = null
-            }
-          }, 1000)
-        } else {
-          alert(result.message || '发送失败')
-        }
+        await http.post(`/api/user/sendCode?email=${encodeURIComponent(this.newEmail)}`)
+        alert('验证码已发送')
+        this.countdown = 60
+        this.timer = setInterval(() => {
+          this.countdown--
+          if (this.countdown <= 0) {
+            clearInterval(this.timer)
+            this.timer = null
+          }
+        }, 1000)
       } catch (error) {
-        alert('发送失败，请检查网络')
+        alert(error.message || '发送失败')
       }
     },
     async confirmEmailChange() {
@@ -315,30 +311,56 @@ export default {
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/user/updateEmail`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            email: this.newEmail,
-            code: this.emailCode
-          })
+        await http.post('/api/user/updateEmail', {
+          email: this.newEmail,
+          code: this.emailCode
         })
-        const result = await response.json()
-
-        if (result.code === 200) {
-          alert('邮箱修改成功')
-          this.userInfo.email = this.newEmail
-          this.showEmailModal = false
-          this.newEmail = ''
-          this.emailCode = ''
-        } else {
-          alert(result.message || '修改失败')
-        }
+        alert('邮箱修改成功')
+        this.userInfo.email = this.newEmail
+        this.showEmailModal = false
+        this.newEmail = ''
+        this.emailCode = ''
       } catch (error) {
-        alert('修改失败，请检查网络')
+        alert(error.message || '修改失败')
+      }
+    },
+    // 修改密码相关方法
+    closePasswordModal() {
+      this.showPasswordModal = false
+      this.passwordForm = {
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      }
+    },
+    async confirmPasswordChange() {
+      const { oldPassword, newPassword, confirmPassword } = this.passwordForm
+
+      if (!oldPassword || !newPassword || !confirmPassword) {
+        alert('请填写完整信息')
+        return
+      }
+      if (newPassword.length < 6) {
+        alert('新密码长度不能少于6位')
+        return
+      }
+      if (newPassword !== confirmPassword) {
+        alert('两次输入的新密码不一致')
+        return
+      }
+
+      this.passwordLoading = true
+      try {
+        await http.post('/api/user/changePassword', {
+          oldPassword,
+          newPassword
+        })
+        alert('密码修改成功')
+        this.closePasswordModal()
+      } catch (error) {
+        alert(error.message || '修改失败')
+      } finally {
+        this.passwordLoading = false
       }
     }
   }

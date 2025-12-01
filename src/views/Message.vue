@@ -1,14 +1,14 @@
 <template>
-  <div class="message-page">
+  <div class="message-page" :class="{ 'dark-theme': isDarkTheme }">
+    <!-- 导航栏（放在最外层，不受 v-show 影响） -->
+    <NavBar />
+
     <!-- 弹幕欢迎区域 -->
     <div class="danmaku-welcome" v-show="!showMessageList">
       <!-- 全屏背景图 -->
       <div class="page-background">
-        <img src="../../image/wallhaven-mlldj8.jpg" alt="背景图" class="bg-image" />
+        <img :src="bgImage" alt="背景图" class="bg-image" @load="handleBgLoad" @error="handleBgError" />
       </div>
-
-      <!-- 导航栏 -->
-      <NavBar />
 
       <!-- 弹幕容器 -->
       <div class="danmaku-container" ref="danmakuContainer">
@@ -45,7 +45,7 @@
     <div class="message-list-section" v-show="showMessageList">
       <!-- 背景 -->
       <div class="message-list-bg">
-        <img src="../../image/wallhaven-mlldj8.jpg" alt="背景图" class="bg-image" />
+        <img :src="bgImage" alt="背景图" class="bg-image" />
       </div>
 
       <!-- 小火箭 -->
@@ -61,6 +61,15 @@
 
       <!-- 留言内容区 -->
       <div class="message-content-wrapper">
+        <!-- 页面标题 - 用于导航栏隐藏检测 -->
+        <div class="page-header" id="message-content-header">
+          <div class="header-title">
+            <span class="title-icon">💬</span>
+            <span>留言板</span>
+          </div>
+          <p class="header-subtitle">留下你的足迹，分享你的想法</p>
+        </div>
+
         <!-- 留言输入框 -->
         <div class="message-box">
           <div class="message-header">
@@ -104,11 +113,13 @@
               <div class="comment-body">
                 <div class="comment-user">
                   <span class="user-name">{{ msg.user.name }}</span>
-                  <span class="user-level" :style="{ background: getLevelColor(msg.user.level) }">
+                  <span class="user-level"
+                    :style="{ background: msg.user.levelColor || getLevelColor(msg.user.level) }">
+                    <span class="level-icon">{{ msg.user.levelIcon || '' }}</span>
                     LV{{ msg.user.level }}
                   </span>
                   <span class="user-title" v-if="msg.user.title"
-                    :style="{ borderColor: getTitleColor(msg.user.title) }">
+                    :style="{ borderColor: msg.user.levelColor || getTitleColor(msg.user.title) }">
                     {{ msg.user.title }}
                   </span>
                 </div>
@@ -150,7 +161,9 @@
                   <div class="reply-body">
                     <div class="reply-user">
                       <span class="user-name">{{ reply.user.name }}</span>
-                      <span class="user-level" :style="{ background: getLevelColor(reply.user.level) }">
+                      <span class="user-level"
+                        :style="{ background: reply.user.levelColor || getLevelColor(reply.user.level) }">
+                        <span class="level-icon">{{ reply.user.levelIcon || '' }}</span>
                         LV{{ reply.user.level }}
                       </span>
                     </div>
@@ -170,6 +183,9 @@
             @page-change="changePage" />
         </div>
       </div>
+
+      <!-- 页脚 -->
+      <Footer minimal />
     </div>
   </div>
 </template>
@@ -177,16 +193,21 @@
 <script>
 import NavBar from '@/components/NavBar.vue'
 import AppPagination from '@/components/Pagination.vue'
-import API_BASE_URL from '@/config/api'
+import Footer from '@/components/Footer.vue'
+import { http } from '@/utils/request'
+import { getRandomBg, getFallbackBg } from '@/utils/randomBg'
+import { hideLoading } from '@/utils/pageLoader'
 
 export default {
   name: 'MessagePage',
   components: {
     NavBar,
-    AppPagination
+    AppPagination,
+    Footer
   },
   data() {
     return {
+      isDarkTheme: false,
       // 用户信息
       currentUser: null,
       // 弹幕相关
@@ -223,14 +244,29 @@ export default {
         '😮', '🤐', '😯', '😪', '😫', '🥱', '😴', '😌', '😛', '😜',
         '😝', '🤤', '😒', '😓', '😔', '😕', '🙃', '🤑', '😲', '🙁',
         '👍', '👎', '👏', '🙌', '❤️', '🧡', '💛', '💚', '💙', '💜'
-      ]
+      ],
+      bgImage: ''
     }
   },
   mounted() {
+    this.bgImage = getRandomBg('message')
+    this.checkTheme()
     this.loadUserInfo()
     this.loadMessages()
     this.loadMessageList()
     this.setupScrollListener()
+    // 监听主题变化
+    this.themeObserver = new MutationObserver(() => {
+      this.checkTheme()
+    })
+    this.themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    })
+    // 超时保护
+    this.loadingTimeout = setTimeout(() => {
+      hideLoading()
+    }, 8000)
   },
   beforeDestroy() {
     // 清除所有弹幕的动画
@@ -238,16 +274,22 @@ export default {
       if (d.timer) clearTimeout(d.timer)
     })
     window.removeEventListener('wheel', this.handleWheel)
+    if (this.loadingTimeout) {
+      clearTimeout(this.loadingTimeout)
+    }
+    if (this.themeObserver) {
+      this.themeObserver.disconnect()
+    }
   },
   methods: {
+    checkTheme() {
+      this.isDarkTheme = document.documentElement.classList.contains('dark-theme')
+    },
     async loadUserInfo() {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/user/info`, {
-          credentials: 'include'
-        })
-        const result = await response.json()
-        if (result.code === 200 && result.data) {
-          this.currentUser = result.data
+        const res = await http.get('/api/user/info')
+        if (res.data) {
+          this.currentUser = res.data
         }
       } catch (error) {
         console.error('获取用户信息失败:', error)
@@ -255,13 +297,9 @@ export default {
     },
     async loadMessages() {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/message/list`, {
-          credentials: 'include'
-        })
-        const result = await response.json()
-        if (result.code === 200 && result.data) {
-          this.mockMessages = result.data
-          // 初始化弹幕
+        const res = await http.get('/api/message/list')
+        if (res.data) {
+          this.mockMessages = res.data
           this.initDanmaku()
         }
       } catch (error) {
@@ -280,13 +318,8 @@ export default {
       return this.colors[Math.floor(Math.random() * this.colors.length)]
     },
     getRandomTop() {
-      // 随机高度，避开中间输入框区域 (40%-60%)
-      const zones = [
-        { min: 5, max: 35 },   // 上部区域
-        { min: 65, max: 90 }   // 下部区域
-      ]
-      const zone = zones[Math.floor(Math.random() * zones.length)]
-      return zone.min + Math.random() * (zone.max - zone.min)
+      // 全屏随机高度 (5% - 90%)
+      return 5 + Math.random() * 85
     },
     addDanmaku(content, avatar, likes = 0, msgId = null) {
       const id = this.danmakuId++
@@ -406,12 +439,7 @@ export default {
 
       // 发送到服务器
       try {
-        await fetch(`${API_BASE_URL}/api/message/send`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ content })
-        })
+        await http.post('/api/message/send', { content })
       } catch (error) {
         console.error('发送弹幕失败:', error)
       }
@@ -435,26 +463,29 @@ export default {
       this.showMessageList = true
       this.$nextTick(() => {
         window.scrollTo({ top: 0, behavior: 'smooth' })
+        // 触发 scroll 事件让 NavBar 检测并隐藏
+        window.dispatchEvent(new Event('scroll'))
       })
     },
     scrollToDanmaku() {
       this.showMessageList = false
       window.scrollTo({ top: 0, behavior: 'smooth' })
+      // 触发 scroll 事件让 NavBar 检测并显示
+      this.$nextTick(() => {
+        window.dispatchEvent(new Event('scroll'))
+      })
     },
     // 留言列表相关
     async loadMessageList(page = 1) {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/message/comments/page?page=${page}&pageSize=${this.pageSize}`, {
-          credentials: 'include'
-        })
-        const result = await response.json()
-        if (result.code === 200 && result.data) {
-          this.messageList = result.data.list
-          this.currentPage = result.data.page
-          this.totalPages = result.data.totalPages
-          this.totalMessages = result.data.total
-          this.hasNext = result.data.hasNext
-          this.hasPrev = result.data.hasPrev
+        const res = await http.get('/api/message/comments/page', { page, pageSize: this.pageSize })
+        if (res.data) {
+          this.messageList = res.data.list
+          this.currentPage = res.data.page
+          this.totalPages = res.data.totalPages
+          this.totalMessages = res.data.total
+          this.hasNext = res.data.hasNext
+          this.hasPrev = res.data.hasPrev
         }
       } catch (error) {
         console.error('加载留言列表失败:', error)
@@ -485,29 +516,13 @@ export default {
       const file = e.target.files[0]
       if (!file) return
 
-      // 上传图片到服务器
-      const formData = new FormData()
-      formData.append('file', file)
-
       try {
-        const response = await fetch(`${API_BASE_URL}/api/essay/uploadImage`, {
-          method: 'POST',
-          credentials: 'include',
-          body: formData
-        })
-        const result = await response.json()
-        if (result.code === 200 && result.data) {
-          this.uploadedImages.push(result.data)
-        } else if (result.code === 401) {
-          alert('请先登录')
-        } else {
-          alert('图片上传失败')
-        }
+        const res = await http.upload('/api/essay/uploadImage', file)
+        this.uploadedImages.push(res.data)
       } catch (error) {
         console.error('上传图片失败:', error)
-        alert('图片上传失败')
+        alert(error.message || '图片上传失败')
       }
-      // 清空input，允许重复选择同一文件
       e.target.value = ''
     },
     removeImage(index) {
@@ -519,30 +534,17 @@ export default {
         return
       }
       try {
-        const response = await fetch(`${API_BASE_URL}/api/message/comment`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            content: this.messageText,
-            images: this.uploadedImages
-          })
+        await http.post('/api/message/comment', {
+          content: this.messageText,
+          images: this.uploadedImages
         })
-        const result = await response.json()
-        if (result.code === 200) {
-          // 提交成功后刷新第一页
-          this.loadMessageList(1)
-          this.messageText = ''
-          this.uploadedImages = []
-          this.showEmojiPicker = false
-        } else if (result.code === 401) {
-          alert('请先登录')
-        }
-      } catch (error) {
-        console.error('提交留言失败:', error)
+        this.loadMessageList(1)
         this.messageText = ''
         this.uploadedImages = []
         this.showEmojiPicker = false
+      } catch (error) {
+        console.error('提交留言失败:', error)
+        alert(error.message || '提交留言失败')
       }
     },
     openReplyBox(msgId) {
@@ -566,38 +568,19 @@ export default {
         return
       }
       try {
-        const response = await fetch(`${API_BASE_URL}/api/message/reply`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            messageId: msgId,
-            content: content
-          })
+        const res = await http.post('/api/message/reply', {
+          messageId: msgId,
+          content: content
         })
-        const result = await response.json()
-        if (result.code === 200) {
-          const msg = this.messageList.find(m => m.id === msgId)
-          if (msg) {
-            if (!msg.replies) msg.replies = []
-            msg.replies.push(result.data)
-          }
-          this.closeReplyBox(msgId)
-        }
-      } catch (error) {
-        console.error('回复失败:', error)
-        // 模拟回复成功
         const msg = this.messageList.find(m => m.id === msgId)
         if (msg) {
           if (!msg.replies) msg.replies = []
-          msg.replies.push({
-            id: Date.now(),
-            user: { name: '游客', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=guest', level: 1 },
-            date: new Date().toISOString().split('T')[0],
-            content: content
-          })
+          msg.replies.push(res.data)
         }
         this.closeReplyBox(msgId)
+      } catch (error) {
+        console.error('回复失败:', error)
+        alert(error.message || '回复失败')
       }
     },
     getLevelColor(level) {
@@ -612,6 +595,19 @@ export default {
         '元婴': '#2ecc71'
       }
       return titleColors[title] || '#95a5a6'
+    },
+    handleBgLoad() {
+      if (this.loadingTimeout) {
+        clearTimeout(this.loadingTimeout)
+      }
+      hideLoading()
+    },
+    handleBgError() {
+      if (this.loadingTimeout) {
+        clearTimeout(this.loadingTimeout)
+      }
+      this.bgImage = getFallbackBg(this.bgImage, 'message')
+      hideLoading()
     }
   }
 }
@@ -717,7 +713,7 @@ export default {
 
 .danmaku-item:hover {
   transform: scale(1.05);
-  z-index: 100;
+  z-index: 15;
 }
 
 .danmaku-avatar {
@@ -907,7 +903,36 @@ export default {
   z-index: 10;
   max-width: 800px;
   margin: 0 auto;
-  padding: 80px 20px 40px;
+  padding: 30px 20px 40px;
+}
+
+/* 页面标题 */
+.page-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding: 20px;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 28px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.title-icon {
+  font-size: 32px;
+}
+
+.header-subtitle {
+  margin-top: 10px;
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
 }
 
 /* 留言输入框 */
@@ -1067,10 +1092,19 @@ export default {
   display: flex;
   gap: 12px;
   padding: 15px;
-  background: #f9f9f9;
-  border-radius: 10px;
+  background: rgba(249, 249, 249, 0.9);
+  backdrop-filter: blur(5px);
+  border-radius: 12px;
   position: relative;
   flex-wrap: wrap;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  border: 1px solid transparent;
+}
+
+.comment-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  border-color: rgba(102, 126, 234, 0.2);
 }
 
 .comment-avatar {
@@ -1105,6 +1139,13 @@ export default {
   border-radius: 4px;
   font-size: 11px;
   color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.user-level .level-icon {
+  font-size: 10px;
 }
 
 .user-title {
@@ -1267,5 +1308,199 @@ export default {
 .reply-to {
   color: #667eea;
   font-weight: 500;
+}
+
+/* ========== 黑暗主题适配 ========== */
+.dark-theme .input-wrapper {
+  background: rgba(40, 40, 60, 0.6);
+  border-color: rgba(100, 100, 120, 0.3);
+}
+
+.dark-theme .danmaku-input {
+  color: #eee;
+}
+
+.dark-theme .danmaku-input::placeholder {
+  color: #888;
+}
+
+.dark-theme .message-box {
+  background: rgba(30, 30, 50, 0.95);
+}
+
+.dark-theme .message-title {
+  color: #ffb74d;
+}
+
+.dark-theme .emoji-picker {
+  background: rgba(40, 40, 60, 0.9);
+}
+
+.dark-theme .emoji-item:hover {
+  background: rgba(80, 80, 100, 0.5);
+}
+
+.dark-theme .comments-section {
+  background: rgba(30, 30, 50, 0.95);
+}
+
+.dark-theme .comments-header {
+  color: #eee;
+}
+
+.dark-theme .comments-divider {
+  color: #555;
+}
+
+.dark-theme .comment-item {
+  background: rgba(40, 40, 60, 0.8);
+}
+
+.dark-theme .user-name {
+  color: #eee;
+}
+
+.dark-theme .comment-date {
+  color: #888;
+}
+
+.dark-theme .comment-content {
+  color: #ccc;
+}
+
+.dark-theme .reply-input-box {
+  background: rgba(50, 50, 70, 0.9);
+  border-color: rgba(100, 100, 120, 0.3);
+}
+
+.dark-theme .reply-input-header {
+  color: #aaa;
+}
+
+.dark-theme .close-reply {
+  color: #888;
+}
+
+.dark-theme .reply-textarea {
+  background: rgba(40, 40, 60, 0.8);
+  border-color: rgba(100, 100, 120, 0.3);
+  color: #eee;
+}
+
+.dark-theme .reply-item {
+  background: rgba(50, 50, 70, 0.8);
+}
+
+.dark-theme .reply-date {
+  color: #888;
+}
+
+.dark-theme .reply-content {
+  color: #ccc;
+}
+
+/* 响应式布局 - 平板 */
+@media (max-width: 992px) {
+  .message-container {
+    max-width: 100%;
+    padding: 20px 30px;
+  }
+}
+
+/* 响应式布局 - 手机 */
+@media (max-width: 768px) {
+  .input-title {
+    font-size: 32px;
+  }
+
+  .input-wrapper {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .danmaku-input {
+    width: 100%;
+    padding: 12px 15px;
+    font-size: 14px;
+  }
+
+  .send-btn {
+    width: 100%;
+    padding: 12px;
+  }
+
+  .scroll-hint {
+    font-size: 13px;
+  }
+
+  .message-container {
+    padding: 15px;
+  }
+
+  .message-card {
+    padding: 15px;
+    margin-bottom: 15px;
+  }
+
+  .message-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .message-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .message-username {
+    font-size: 14px;
+  }
+
+  .message-content {
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .message-footer {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .reply-input {
+    font-size: 14px;
+    min-height: 60px;
+  }
+
+  /* 弹幕样式调整 */
+  .danmaku-item {
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+
+  .danmaku-avatar {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* 响应式布局 - 超小屏幕 */
+@media (max-width: 375px) {
+  .input-title {
+    font-size: 26px;
+  }
+
+  .message-container {
+    padding: 10px;
+  }
+
+  .message-card {
+    padding: 12px;
+  }
+
+  .danmaku-input {
+    font-size: 13px;
+    padding: 10px 12px;
+  }
 }
 </style>

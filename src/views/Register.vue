@@ -2,7 +2,7 @@
   <div class="register-page">
     <!-- 背景图片 -->
     <div class="register-background">
-      <img src="../../image/wallhaven-9oo2k1.jpg" alt="背景图" class="bg-image" />
+      <img :src="bgImage" alt="背景图" class="bg-image" @error="handleBgError" />
     </div>
 
     <!-- 注册框 -->
@@ -50,7 +50,8 @@
 </template>
 
 <script>
-import API_BASE_URL from '@/config/api'
+import { http } from '@/utils/request'
+import { getRandomBg, getFallbackBg } from '@/utils/randomBg'
 
 export default {
   name: 'RegisterPage',
@@ -63,8 +64,12 @@ export default {
         email: '',
         password: '',
         code: ''
-      }
+      },
+      bgImage: ''
     }
+  },
+  mounted() {
+    this.bgImage = getRandomBg('register')
   },
   beforeDestroy() {
     if (this.timer) {
@@ -74,24 +79,12 @@ export default {
   methods: {
     async handleRegister() {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/user/register`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(this.registerForm)
-        })
-        const result = await response.json()
-
-        if (result.code === 200) {
-          alert('注册成功！')
-          this.$router.push('/login')
-        } else {
-          alert(result.message || '注册失败')
-        }
+        await http.post('/api/user/register', this.registerForm)
+        alert('注册成功！')
+        this.$router.push('/login')
       } catch (error) {
         console.error('注册失败：', error)
-        alert('注册失败，请检查网络')
+        alert(error.message || '注册失败')
       }
     },
     async sendCode() {
@@ -106,31 +99,26 @@ export default {
       }
 
       try {
-        const response = await fetch(`${API_BASE_URL}/api/user/sendCode?email=${encodeURIComponent(this.registerForm.email)}`, {
-          method: 'POST'
-        })
-        const result = await response.json()
-
-        if (result.code === 200) {
-          alert('验证码已发送到您的邮箱')
-          this.countdown = 60
-          this.timer = setInterval(() => {
-            this.countdown--
-            if (this.countdown <= 0) {
-              clearInterval(this.timer)
-              this.timer = null
-            }
-          }, 1000)
-        } else {
-          alert(result.message || '发送失败')
-        }
+        await http.post(`/api/user/sendCode?email=${encodeURIComponent(this.registerForm.email)}`)
+        alert('验证码已发送到您的邮箱')
+        this.countdown = 60
+        this.timer = setInterval(() => {
+          this.countdown--
+          if (this.countdown <= 0) {
+            clearInterval(this.timer)
+            this.timer = null
+          }
+        }, 1000)
       } catch (error) {
         console.error('发送验证码失败：', error)
-        alert('发送验证码失败，请检查网络')
+        alert(error.message || '发送验证码失败')
       }
     },
     goToLogin() {
       this.$router.push('/login')
+    },
+    handleBgError() {
+      this.bgImage = getFallbackBg(this.bgImage, 'register')
     }
   }
 }
