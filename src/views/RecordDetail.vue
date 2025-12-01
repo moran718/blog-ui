@@ -137,7 +137,7 @@ import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 
-import { http } from '@/utils/request'
+import { http, getResourceUrl } from '@/utils/request'
 import { getRandomBg, getFallbackBg } from '@/utils/randomBg'
 
 // 配置 marked
@@ -180,7 +180,13 @@ export default {
   computed: {
     formattedContent() {
       if (!this.record.content) return ''
-      return marked(this.record.content)
+      // 将相对路径的图片转换为完整 URL
+      let content = this.record.content
+      // 匹配 Markdown 图片语法 ![alt](/uploads/...)
+      content = content.replace(/!\[([^\]]*)\]\((\/uploads\/[^)]+)\)/g, (_, alt, path) => {
+        return `![${alt}](${getResourceUrl(path)})`
+      })
+      return marked(content)
     }
   },
   mounted() {
