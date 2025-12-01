@@ -16,7 +16,6 @@ const localImages = [
 // 在线随机图 API 列表
 const onlineApis = [
   'https://www.dmoe.cc/random.php',
-  'https://api.ixiaowai.cn/api/api.php',
   'https://acg.toubiec.cn/random.php'
 ]
 
@@ -119,6 +118,31 @@ export function preloadBg(pageName) {
 
   // 创建 Image 对象预加载
   const img = new Image()
+
+  // 记录已尝试过的 URL，避免重复尝试
+  const triedUrls = new Set([bgUrl])
+
+  img.onerror = () => {
+    console.warn(`背景图加载失败: ${img.src}，尝试备用图片...`)
+
+    // 获取备用图片
+    const fallbackUrl = getFallbackBg(img.src, pageName)
+
+    // 如果备用图片没尝试过，则尝试加载
+    if (!triedUrls.has(fallbackUrl)) {
+      triedUrls.add(fallbackUrl)
+      // 更新缓存为备用图片
+      pageImageCache[pageName] = fallbackUrl
+      img.src = fallbackUrl
+    } else {
+      // 所有在线 API 都失败了，使用本地图片
+      const localImg = localImages[Math.floor(Math.random() * localImages.length)]
+      pageImageCache[pageName] = localImg
+      img.src = localImg
+      console.log(`使用本地备用图片: ${localImg}`)
+    }
+  }
+
   img.src = bgUrl
 
   return bgUrl
