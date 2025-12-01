@@ -14,7 +14,7 @@
         <!-- 头像 -->
         <div class="avatar-section">
           <div class="avatar-wrapper" @click="triggerFileInput">
-            <img :src="userInfo.avatar || defaultAvatar" alt="用户头像" class="user-avatar" />
+            <img :src="avatarUrl" alt="用户头像" class="user-avatar" />
             <div class="avatar-overlay">
               <span>更换头像</span>
             </div>
@@ -136,7 +136,7 @@
 
 <script>
 import NavBar from '@/components/NavBar.vue'
-import { http } from '@/utils/request'
+import { http, getResourceUrl } from '@/utils/request'
 
 export default {
   name: 'ProfilePage',
@@ -170,6 +170,19 @@ export default {
         newPassword: '',
         confirmPassword: ''
       }
+    }
+  },
+  computed: {
+    avatarUrl() {
+      if (!this.userInfo.avatar) {
+        return this.defaultAvatar
+      }
+      // 如果已经是完整URL，直接返回
+      if (this.userInfo.avatar.startsWith('http://') || this.userInfo.avatar.startsWith('https://')) {
+        return this.userInfo.avatar
+      }
+      // 否则拼接后端地址
+      return getResourceUrl(this.userInfo.avatar)
     }
   },
   mounted() {

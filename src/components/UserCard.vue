@@ -7,7 +7,7 @@
     <div class="user-info">
       <!-- 头像 -->
       <div class="avatar-wrapper">
-        <img :src="user.avatar" :alt="user.nickname" class="avatar" />
+        <img :src="formattedAvatar" :alt="user.nickname" class="avatar" />
         <span class="online-status" :class="{ online: user.online }"></span>
       </div>
 
@@ -41,7 +41,7 @@
 </template>
 
 <script>
-import { http } from '@/utils/request'
+import { http, getResourceUrl } from '@/utils/request'
 
 export default {
   name: 'UserCard',
@@ -61,6 +61,16 @@ export default {
     }
   },
   computed: {
+    formattedAvatar() {
+      const avatar = this.user.avatar
+      if (!avatar) {
+        return 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin'
+      }
+      if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        return avatar
+      }
+      return getResourceUrl(avatar)
+    },
     genderIcon() {
       const icons = {
         male: '♂',

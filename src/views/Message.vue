@@ -15,7 +15,7 @@
         <div v-for="danmaku in danmakuList" :key="danmaku.id" class="danmaku-item" :style="danmaku.style"
           :class="{ 'danmaku-liked': danmaku.liked }" @mouseenter="pauseDanmaku(danmaku)"
           @mouseleave="resumeDanmaku(danmaku)" @click="toggleLike(danmaku)">
-          <img :src="danmaku.avatar" alt="头像" class="danmaku-avatar" />
+          <img :src="formatAvatar(danmaku.avatar)" alt="头像" class="danmaku-avatar" />
           <span class="danmaku-text">{{ danmaku.content }}</span>
           <span class="danmaku-like">
             <span class="like-icon">{{ danmaku.liked ? '❤️' : '🤍' }}</span>
@@ -109,7 +109,7 @@
           </div>
           <div class="comments-list">
             <div class="comment-item" v-for="msg in messageList" :key="msg.id">
-              <img :src="msg.user.avatar" alt="头像" class="comment-avatar" />
+              <img :src="formatAvatar(msg.user.avatar)" alt="头像" class="comment-avatar" />
               <div class="comment-body">
                 <div class="comment-user">
                   <span class="user-name">{{ msg.user.name }}</span>
@@ -157,7 +157,7 @@
               <!-- 回复列表 -->
               <div class="reply-list" v-if="msg.replies && msg.replies.length">
                 <div class="reply-item" v-for="reply in msg.replies" :key="reply.id">
-                  <img :src="reply.user.avatar" alt="头像" class="reply-avatar" />
+                  <img :src="formatAvatar(reply.user.avatar)" alt="头像" class="reply-avatar" />
                   <div class="reply-body">
                     <div class="reply-user">
                       <span class="user-name">{{ reply.user.name }}</span>
@@ -194,7 +194,7 @@
 import NavBar from '@/components/NavBar.vue'
 import AppPagination from '@/components/Pagination.vue'
 import Footer from '@/components/Footer.vue'
-import { http } from '@/utils/request'
+import { http, getResourceUrl } from '@/utils/request'
 import { getRandomBg, getFallbackBg } from '@/utils/randomBg'
 import { hideLoading } from '@/utils/pageLoader'
 
@@ -282,6 +282,15 @@ export default {
     }
   },
   methods: {
+    formatAvatar(avatar) {
+      if (!avatar) {
+        return 'https://api.dicebear.com/7.x/avataaars/svg?seed=user'
+      }
+      if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        return avatar
+      }
+      return getResourceUrl(avatar)
+    },
     checkTheme() {
       this.isDarkTheme = document.documentElement.classList.contains('dark-theme')
     },

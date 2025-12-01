@@ -52,7 +52,7 @@
           <div class="essay-card" v-for="essay in essays" :key="essay.id">
             <!-- 用户信息 -->
             <div class="essay-user">
-              <img :src="essay.user.avatar" alt="头像" class="user-avatar" />
+              <img :src="formatAvatar(essay.user.avatar)" alt="头像" class="user-avatar" />
               <div class="user-info">
                 <span class="user-name">{{ essay.user.name }}</span>
                 <span class="user-level"
@@ -140,7 +140,7 @@
               </div>
               <div class="comments-list">
                 <div class="comment-item" v-for="comment in essay.commentList" :key="comment.id">
-                  <img :src="comment.user.avatar" alt="头像" class="comment-avatar" />
+                  <img :src="formatAvatar(comment.user.avatar)" alt="头像" class="comment-avatar" />
                   <div class="comment-body">
                     <div class="comment-user">
                       <span class="user-name">{{ comment.user.name }}</span>
@@ -199,7 +199,7 @@
                     <!-- 嵌套回复 -->
                     <div class="reply-list" v-if="comment.replies && comment.replies.length">
                       <div class="reply-item" v-for="reply in comment.replies" :key="reply.id">
-                        <img :src="reply.user.avatar" alt="头像" class="reply-avatar" />
+                        <img :src="formatAvatar(reply.user.avatar)" alt="头像" class="reply-avatar" />
                         <div class="reply-body">
                           <div class="comment-user">
                             <span class="user-name">{{ reply.user.name }}</span>
@@ -372,6 +372,15 @@ export default {
   methods: {
     getResourceUrl(path) {
       return getResourceUrl(path)
+    },
+    formatAvatar(avatar) {
+      if (!avatar) {
+        return 'https://api.dicebear.com/7.x/avataaars/svg?seed=user'
+      }
+      if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        return avatar
+      }
+      return getResourceUrl(avatar)
     },
     checkTheme() {
       this.isDarkTheme = document.body.classList.contains('dark-theme')

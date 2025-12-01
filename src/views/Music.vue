@@ -43,7 +43,7 @@
           <div class="music-card" v-for="(song, index) in songs" :key="song.id"
             :class="{ playing: currentIndex === index && isPlaying }" @click="handlePlaySong(index)">
             <div class="cover-wrapper">
-              <img :src="song.cover" :alt="song.name" class="cover-img" />
+              <img :src="formatCover(song.cover)" :alt="song.name" class="cover-img" />
               <!-- 播放状态遮罩 -->
               <div class="play-overlay" v-if="currentIndex === index && isPlaying">
                 <div class="sound-wave">
@@ -69,6 +69,7 @@
 import { getRandomBg, getFallbackBg } from '@/utils/randomBg'
 import { hideLoading } from '@/utils/pageLoader'
 import { playSong, playerState } from '@/utils/musicPlayer'
+import { getResourceUrl } from '@/utils/request'
 import NavBar from '@/components/NavBar.vue'
 import Footer from '@/components/Footer.vue'
 
@@ -125,6 +126,15 @@ export default {
     }
   },
   methods: {
+    formatCover(cover) {
+      if (!cover) {
+        return 'https://via.placeholder.com/100?text=Music'
+      }
+      if (cover.startsWith('http://') || cover.startsWith('https://')) {
+        return cover
+      }
+      return getResourceUrl(cover)
+    },
     checkTheme() {
       this.isDarkTheme = document.documentElement.classList.contains('dark-theme')
     },

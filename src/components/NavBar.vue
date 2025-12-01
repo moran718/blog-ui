@@ -161,7 +161,7 @@
 </template>
 
 <script>
-import { http } from '@/utils/request'
+import { http, getResourceUrl } from '@/utils/request'
 import { preloadBg } from '@/utils/randomBg'
 import SearchModal from './SearchModal.vue'
 
@@ -375,7 +375,12 @@ export default {
         const res = await http.get('/api/user/info')
         if (res.data) {
           this.isLoggedIn = true
-          this.userAvatar = res.data.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=user'
+          // 处理头像路径
+          let avatar = res.data.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=user'
+          if (avatar && !avatar.startsWith('http://') && !avatar.startsWith('https://')) {
+            avatar = getResourceUrl(avatar)
+          }
+          this.userAvatar = avatar
           localStorage.setItem('user', JSON.stringify(res.data))
         } else {
           this.isLoggedIn = false
