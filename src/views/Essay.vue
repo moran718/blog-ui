@@ -71,7 +71,7 @@
               <p class="essay-text">{{ essay.content }}</p>
               <div class="essay-images" v-if="essay.images && essay.images.length">
                 <img v-for="(img, index) in essay.images" :key="index" :src="getResourceUrl(img)" alt="图片"
-                  class="essay-image" />
+                  class="essay-image" @click="openPreview(getResourceUrl(img))" />
               </div>
               <div class="essay-videos" v-if="essay.videos && essay.videos.length">
                 <video v-for="(video, index) in essay.videos" :key="index" :src="getResourceUrl(video)" controls
@@ -157,8 +157,8 @@
                     <div class="comment-content">{{ comment.content }}</div>
                     <!-- 评论图片 -->
                     <div class="comment-images" v-if="comment.images && comment.images.length">
-                      <img v-for="(img, idx) in comment.images" :key="idx" :src="img" alt="评论图片"
-                        class="comment-image" />
+                      <img v-for="(img, idx) in comment.images" :key="idx" :src="img" alt="评论图片" class="comment-image"
+                        @click="openPreview(img)" />
                     </div>
 
                     <!-- 回复输入框 -->
@@ -219,8 +219,8 @@
                           </div>
                           <!-- 回复图片 -->
                           <div class="reply-images" v-if="reply.images && reply.images.length">
-                            <img v-for="(img, idx) in reply.images" :key="idx" :src="img" alt="回复图片"
-                              class="reply-image" />
+                            <img v-for="(img, idx) in reply.images" :key="idx" :src="img" alt="回复图片" class="reply-image"
+                              @click="openPreview(img)" />
                           </div>
 
                           <!-- 三级回复输入框 -->
@@ -295,6 +295,12 @@
       <!-- 页脚 -->
       <Footer minimal />
     </div>
+
+    <!-- 图片预览弹窗 -->
+    <div class="image-preview-overlay" v-if="previewImage" @click="closePreview">
+      <button class="close-preview-btn" @click.stop="closePreview">×</button>
+      <img :src="previewImage" alt="预览图片" class="preview-image" @click.stop />
+    </div>
   </div>
 </template>
 
@@ -349,7 +355,9 @@ export default {
       hasPrev: false,
       // 评论分页相关（按随笔ID存储）
       commentPagination: {}, // { essayId: { currentPage, totalPages, hasNext, hasPrev, total } }
-      commentPageSize: 5
+      commentPageSize: 5,
+      // 图片预览
+      previewImage: null
     }
   },
   mounted() {
@@ -742,6 +750,14 @@ export default {
       }
       this.bgImage = getFallbackBg(this.bgImage, 'essay')
       hideLoading()
+    },
+    openPreview(imgUrl) {
+      this.previewImage = imgUrl
+      document.body.style.overflow = 'hidden'
+    },
+    closePreview() {
+      this.previewImage = null
+      document.body.style.overflow = ''
     }
   }
 }
@@ -1749,5 +1765,78 @@ export default {
   .essay-image {
     max-height: 200px;
   }
+}
+
+/* ========== 图片预览弹窗 ========== */
+.image-preview-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(10px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease;
+  cursor: zoom-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.preview-image {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+  animation: zoomIn 0.3s ease;
+  cursor: default;
+}
+
+@keyframes zoomIn {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.close-preview-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #fff;
+  font-size: 28px;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.close-preview-btn:hover {
+  background: rgba(255, 107, 157, 0.8);
+  transform: rotate(90deg);
 }
 </style>

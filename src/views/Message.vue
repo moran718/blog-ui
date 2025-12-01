@@ -319,7 +319,7 @@ export default {
       // 逐个添加弹幕，形成错落效果
       this.mockMessages.forEach((msg, index) => {
         setTimeout(() => {
-          this.addDanmaku(msg.content, msg.avatar, msg.likes || 0, msg.id)
+          this.addDanmakuWithState(msg.content, msg.avatar, msg.likes || 0, msg.id, msg.liked || false)
         }, index * 500)
       })
     },
@@ -417,16 +417,36 @@ export default {
       danmaku.paused = false
       this.$set(danmaku.style, 'animationPlayState', 'running')
     },
-    toggleLike(danmaku) {
-      if (danmaku.liked) {
-        danmaku.liked = false
-        danmaku.likes--
-      } else {
-        danmaku.liked = true
-        danmaku.likes++
+    async toggleLike(danmaku) {
+      // 检查是否登录
+      if (!this.currentUser) {
+        alert('请先登录后再点赞')
+        return
       }
-      // 可选：发送点赞请求到服务器
-      // this.sendLikeToServer(danmaku.msgId, danmaku.liked)
+
+      // 先更新前端状态（乐观更新）
+      const wasLiked = danmaku.liked
+      danmaku.liked = !wasLiked
+      danmaku.likes = wasLiked ? danmaku.likes - 1 : danmaku.likes + 1
+
+      // 发送点赞请求到服务器
+      try {
+        const res = await http.post('/api/message/like', { messageId: danmaku.msgId })
+        // 服务器返回的状态与前端预期不一致时，以服务器为准
+        if (res.data !== danmaku.liked) {
+          danmaku.liked = res.data
+          // 重新计算点赞数
+          danmaku.likes = res.data ? danmaku.likes + 1 : danmaku.likes - 1
+        }
+      } catch (error) {
+        console.error('点赞失败:', error)
+        // 请求失败，回滚状态
+        danmaku.liked = wasLiked
+        danmaku.likes = wasLiked ? danmaku.likes + 1 : danmaku.likes - 1
+        if (error.response && error.response.status === 401) {
+          alert('请先登录后再点赞')
+        }
+      }
     },
     async sendDanmaku() {
       if (!this.inputContent.trim()) return
