@@ -2,8 +2,11 @@
   <div>
     <nav class="navbar" :class="{ 'navbar-hidden': isNavHidden }">
       <div class="nav-container">
-        <!-- 左侧留空 -->
-        <div class="nav-left"></div>
+        <!-- 左侧 Logo -->
+        <div class="nav-left" @click="goTo('/', 0)">
+          <img src="/image/logoko.png" alt="Logo" class="nav-logo" />
+          <span class="nav-title">拾光</span>
+        </div>
 
         <!-- 移动端汉堡菜单按钮 -->
         <button class="mobile-menu-btn" @click="toggleMobileMenu" :class="{ active: mobileMenuOpen }">
@@ -501,6 +504,29 @@ export default {
 
 .nav-left {
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+
+.nav-left:hover {
+  opacity: 0.8;
+}
+
+.nav-logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.nav-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 2px;
 }
 
 .nav-list {
@@ -1033,7 +1059,17 @@ export default {
   }
 
   .nav-left {
-    display: none;
+    display: flex;
+    flex: 0;
+  }
+
+  .nav-logo {
+    width: 28px;
+    height: 28px;
+  }
+
+  .nav-title {
+    font-size: 16px;
   }
 
   .nav-list {

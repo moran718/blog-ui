@@ -76,8 +76,10 @@ const router = new VueRouter({
   routes
 })
 
-// 路由守卫 - 页面切换时显示加载动画
+// 路由守卫 - 页面切换时显示加载动画 + 设置页面标题
 router.beforeEach((to, from, next) => {
+  // 设置页面标题
+  document.title = '拾光'
   // 只有从其他页面进入需要加载动画的页面时才显示
   if (pagesWithLoading.includes(to.path) && from.path !== to.path) {
     showLoading()
