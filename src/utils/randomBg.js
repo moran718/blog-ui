@@ -15,8 +15,7 @@ const localImages = [
 
 // 在线随机图 API 列表
 const onlineApis = [
-  'https://www.dmoe.cc/random.php',
-  'https://acg.toubiec.cn/random.php'
+  'https://www.dmoe.cc/random.php'
 ]
 
 // 页面背景图缓存，确保同一次会话中不同页面显示不同图片
