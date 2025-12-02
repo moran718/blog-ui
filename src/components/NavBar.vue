@@ -388,11 +388,13 @@ export default {
         } else {
           this.isLoggedIn = false
           localStorage.removeItem('user')
+          localStorage.removeItem('token')
         }
       } catch (error) {
         console.error('检查登录状态失败：', error)
         this.isLoggedIn = false
         localStorage.removeItem('user')
+        localStorage.removeItem('token')
       }
     },
     async handleLogout() {
@@ -404,6 +406,7 @@ export default {
 
       this.isLoggedIn = false
       localStorage.removeItem('user')
+      localStorage.removeItem('token')
       if (this.$route.path !== '/') {
         this.$router.push('/')
       }

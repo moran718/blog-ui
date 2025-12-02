@@ -17,11 +17,11 @@ const request = axios.create({
 // 请求拦截器
 request.interceptors.request.use(
   config => {
-    // 可以在这里添加 token 等
-    // const token = localStorage.getItem('token')
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`
-    // }
+    // 从 localStorage 获取 token 并添加到请求头
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
     return config
   },
   error => {
@@ -41,6 +41,7 @@ request.interceptors.response.use(
       if (res.code === 401) {
         console.warn('登录已过期，请重新登录')
         localStorage.removeItem('user')
+        localStorage.removeItem('token')
         // 可以在这里跳转到登录页
         // window.location.href = '/login'
       }
@@ -64,6 +65,7 @@ request.interceptors.response.use(
         case 401:
           message = '未登录或登录已过期'
           localStorage.removeItem('user')
+          localStorage.removeItem('token')
           break
         case 403:
           message = '没有权限访问'

@@ -161,7 +161,11 @@ export default {
 
       try {
         const res = await http.post('/api/user/login', requestData)
-        localStorage.setItem('user', JSON.stringify(res.data))
+        // 存储 token 和用户信息
+        if (res.data.token) {
+          localStorage.setItem('token', res.data.token)
+        }
+        localStorage.setItem('user', JSON.stringify(res.data.user))
         this.$router.push('/')
       } catch (error) {
         console.error('登录失败：', error)
