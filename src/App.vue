@@ -100,6 +100,10 @@ export default {
           // 忽略错误
         })
       }
+      // 记录详细浏览信息（每次访问都记录）
+      http.post('/api/browse/record').catch(() => {
+        // 忽略错误
+      })
     }
   }
 }
