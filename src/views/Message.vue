@@ -81,7 +81,7 @@
             <!-- 已上传图片预览 -->
             <div class="uploaded-images" v-if="uploadedImages.length">
               <div class="uploaded-image-item" v-for="(img, index) in uploadedImages" :key="index">
-                <img :src="img" alt="上传图片" />
+                <img :src="formatImageUrl(img)" alt="上传图片" />
                 <span class="remove-image" @click="removeImage(index)">×</span>
               </div>
             </div>
@@ -103,7 +103,7 @@
         <!-- 评论列表 -->
         <div class="comments-section">
           <div class="comments-header">
-            <span>Comments</span>
+            <span>留言</span>
             <span class="comments-divider">|</span>
             <span>{{ totalMessages }}条留言</span>
           </div>
@@ -127,7 +127,7 @@
                 <div class="comment-content">{{ msg.content }}</div>
                 <!-- 图片显示 -->
                 <div class="comment-images" v-if="msg.images && msg.images.length">
-                  <img v-for="(img, idx) in msg.images" :key="idx" :src="img" class="comment-image" />
+                  <img v-for="(img, idx) in msg.images" :key="idx" :src="formatImageUrl(img)" class="comment-image" />
                 </div>
               </div>
               <button class="reply-btn" @click="openReplyBox(msg.id)">回复</button>
@@ -290,6 +290,13 @@ export default {
         return avatar
       }
       return getResourceUrl(avatar)
+    },
+    formatImageUrl(img) {
+      if (!img) return ''
+      if (img.startsWith('http://') || img.startsWith('https://')) {
+        return img
+      }
+      return getResourceUrl(img)
     },
     checkTheme() {
       this.isDarkTheme = document.documentElement.classList.contains('dark-theme')

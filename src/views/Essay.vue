@@ -134,7 +134,7 @@
             <div class="comments-section"
               v-if="expandedComments[essay.id] && (essay.commentList && essay.commentList.length || commentPagination[essay.id])">
               <div class="comments-header">
-                <span>Comments</span>
+                <span>评论</span>
                 <span class="comments-divider">|</span>
                 <span>{{ commentPagination[essay.id] ? commentPagination[essay.id].total : essay.comments }}条留言</span>
               </div>
