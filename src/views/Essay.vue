@@ -109,7 +109,7 @@
                 <!-- 已上传图片预览 -->
                 <div class="uploaded-images" v-if="uploadedImages[essay.id] && uploadedImages[essay.id].length">
                   <div class="uploaded-image-item" v-for="(img, index) in uploadedImages[essay.id]" :key="index">
-                    <img :src="img" alt="上传图片" />
+                    <img :src="getResourceUrl(img)" alt="上传图片" />
                     <span class="remove-image" @click="removeImage(essay.id, index)">×</span>
                   </div>
                 </div>
@@ -157,8 +157,8 @@
                     <div class="comment-content">{{ comment.content }}</div>
                     <!-- 评论图片 -->
                     <div class="comment-images" v-if="comment.images && comment.images.length">
-                      <img v-for="(img, idx) in comment.images" :key="idx" :src="img" alt="评论图片" class="comment-image"
-                        @click="openPreview(img)" />
+                      <img v-for="(img, idx) in comment.images" :key="idx" :src="getResourceUrl(img)" alt="评论图片" class="comment-image"
+                        @click="openPreview(getResourceUrl(img))" />
                     </div>
 
                     <!-- 回复输入框 -->
@@ -176,7 +176,7 @@
                         v-if="replyImages[essay.id + '-' + comment.id] && replyImages[essay.id + '-' + comment.id].length">
                         <div class="uploaded-image-item"
                           v-for="(img, index) in replyImages[essay.id + '-' + comment.id]" :key="index">
-                          <img :src="img" alt="上传图片" />
+                          <img :src="getResourceUrl(img)" alt="上传图片" />
                           <span class="remove-image" @click="removeReplyImage(essay.id, comment.id, index)">×</span>
                         </div>
                       </div>
@@ -219,8 +219,8 @@
                           </div>
                           <!-- 回复图片 -->
                           <div class="reply-images" v-if="reply.images && reply.images.length">
-                            <img v-for="(img, idx) in reply.images" :key="idx" :src="img" alt="回复图片" class="reply-image"
-                              @click="openPreview(img)" />
+                            <img v-for="(img, idx) in reply.images" :key="idx" :src="getResourceUrl(img)" alt="回复图片" class="reply-image"
+                              @click="openPreview(getResourceUrl(img))" />
                           </div>
 
                           <!-- 三级回复输入框 -->
@@ -241,7 +241,7 @@
                               <div class="uploaded-image-item"
                                 v-for="(img, index) in replyImages[essay.id + '-' + comment.id + '-' + reply.id]"
                                 :key="index">
-                                <img :src="img" alt="上传图片" />
+                                <img :src="getResourceUrl(img)" alt="上传图片" />
                                 <span class="remove-image"
                                   @click="removeReplyImage(essay.id, comment.id, index, reply.id)">×</span>
                               </div>
