@@ -576,6 +576,11 @@ export default {
         this.$set(this.showMessageBox, essayId, false)
         this.$set(this.showEmojiPicker, essayId, false)
         this.$set(this.expandedComments, essayId, true)
+        
+        // 3秒后自动刷新评论列表以获取AI回复
+        setTimeout(() => {
+          this.loadEssayComments(essayId, 1)
+        }, 3000)
       } catch (error) {
         console.error('留言失败:', error)
         alert(error.message || '留言失败')

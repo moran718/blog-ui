@@ -52,6 +52,36 @@
               音乐
             </a>
           </li>
+          <li class="nav-item has-dropdown" :class="{ active: activeIndex === 6 }"
+            @mouseenter="preloadPage('game')">
+            <a href="javascript:void(0)">
+              <span class="nav-icon">🎮</span>
+              游戏
+            </a>
+            <div class="nav-dropdown">
+              <div class="dropdown-item" @click="goToGame('/game/gomoku')">
+                <span class="nav-icon" style="font-size: 14px; margin-right: 5px;">⚫</span>
+                五子棋
+              </div>
+            </div>
+          </li>
+          <li class="nav-item has-dropdown" :class="{ active: activeIndex === 7 }"
+            @mouseenter="preloadPage('tools')">
+            <a href="javascript:void(0)">
+              <span class="nav-icon">🛠️</span>
+              工具
+            </a>
+            <div class="nav-dropdown">
+              <div class="dropdown-item" @click="goTo('/tools/tarot', 7); closeMobileMenu()">
+                <span class="nav-icon" style="font-size: 14px; margin-right: 5px;">🔮</span>
+                赛博占卜
+              </div>
+              <div class="dropdown-item" @click="goTo('/tools/universe', 7); closeMobileMenu()">
+                <span class="nav-icon" style="font-size: 14px; margin-right: 5px;">🌌</span>
+                平行宇宙
+              </div>
+            </div>
+          </li>
           <li class="nav-item" :class="{ active: activeIndex === 5 }" @click="handleArchiveClick(); closeMobileMenu()"
             @mouseenter="preloadPage('archive')">
             <a href="javascript:void(0)">
@@ -368,9 +398,15 @@ export default {
       }
     },
     handleArchiveClick() {
-      this.setActive(5)
       if (this.$route.path !== '/archive') {
         this.$router.push('/archive')
+      }
+    },
+    goToGame(path) {
+      this.setActive(6)
+      this.closeMobileMenu()
+      if (this.$route.path !== path) {
+        this.$router.push(path)
       }
     },
     async checkLoginStatus() {
@@ -438,6 +474,9 @@ export default {
         '/message': 3,
         '/music': 4,
         '/archive': 5,
+        '/game/gomoku': 6,
+        '/tools/tarot': 7,
+        '/tools/universe': 7,
       }
       if (path in routeIndexMap) {
         this.activeIndex = routeIndexMap[path]
@@ -547,6 +586,7 @@ export default {
   cursor: pointer;
   transition: all 0.3s ease;
   border-radius: 4px;
+  position: relative;
 }
 
 .nav-item:hover {
@@ -578,6 +618,48 @@ export default {
 }
 
 .nav-item:hover a {
+  color: #42b983;
+}
+
+/* 导航下拉菜单 */
+.nav-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: rgba(40, 44, 52, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  min-width: 120px;
+  padding: 5px 0;
+  z-index: 1001;
+}
+
+.nav-item:hover .nav-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.nav-dropdown .dropdown-item {
+  padding: 10px 15px;
+  font-size: 14px;
+  color: #eee;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-dropdown .dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.1);
   color: #42b983;
 }
 

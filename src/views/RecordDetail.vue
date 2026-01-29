@@ -89,6 +89,23 @@
               #{{ tag }}
             </span>
           </div>
+          <!-- AI 总结按钮和展示区域 -->
+          <div class="ai-summary-section">
+            <button class="ai-summary-btn" @click="generateAiSummary" :disabled="aiLoading">
+              <span class="btn-icon">🤖</span>
+              <span class="btn-text">{{ aiLoading ? 'AI 总结中...' : 'AI总结' }}</span>
+            </button>
+            <div class="ai-summary-box" v-if="showAiSummary">
+              <div class="ai-summary-header">
+                <span class="ai-icon">🤖</span>
+                <span class="ai-title">AI 智能总结</span>
+                <button class="close-btn" @click="showAiSummary = false">×</button>
+              </div>
+              <div class="ai-summary-content">
+                <p class="streaming-text">{{ aiSummary }}<span class="cursor" v-if="aiLoading">|</span></p>
+              </div>
+            </div>
+          </div>
         </header>
 
         <!-- 封面图 -->
@@ -174,7 +191,11 @@ export default {
       tocVisible: true,
       activeHeading: null,
       readingProgress: 0,
-      bgImage: ''
+      bgImage: '',
+      // AI 总结相关
+      aiSummary: '',
+      aiLoading: false,
+      showAiSummary: false
     }
   },
   computed: {
@@ -313,6 +334,34 @@ export default {
     },
     handleBgError() {
       this.bgImage = getFallbackBg(this.bgImage, 'record-detail')
+    },
+    // AI 总结流式输出
+    async generateAiSummary() {
+      const id = this.$route.params.id
+      this.aiSummary = ''
+      this.showAiSummary = true
+      this.aiLoading = true
+
+      try {
+        const baseUrl = process.env.VUE_APP_API_URL || 'http://localhost:9999'
+        const response = await fetch(`${baseUrl}/api/ai/summary/${id}`)
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder('utf-8')
+
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          
+          const text = decoder.decode(value, { stream: true })
+          this.aiSummary += text
+        }
+      } catch (error) {
+        console.error('AI 总结生成失败:', error)
+        this.aiSummary = '抱歉，AI 总结生成失败，请稍后重试。'
+      } finally {
+        this.aiLoading = false
+      }
     }
   }
 }
@@ -708,6 +757,43 @@ export default {
   font-size: 13px;
   cursor: pointer;
   transition: transform 0.3s, box-shadow 0.3s;
+}
+
+/* AI 总结区域（顶部） */
+.ai-summary-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px dashed #eee;
+}
+
+.ai-summary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  border: none;
+  border-radius: 25px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.ai-summary-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.ai-summary-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.btn-icon {
+  font-size: 18px;
 }
 
 .article-tags .tag:hover {
@@ -1228,6 +1314,106 @@ export default {
 
   .article-content {
     font-size: 14px;
+  }
+}
+
+/* AI 总结按钮 */
+.ai-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: #fff !important;
+}
+
+.ai-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.ai-btn:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+/* AI 总结展示区域 */
+.ai-summary-box {
+  margin-top: 20px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+  border-radius: 12px;
+  overflow: hidden;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ai-summary-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+}
+
+.ai-icon {
+  font-size: 20px;
+  margin-right: 8px;
+}
+
+.ai-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #fff;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background 0.3s;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.ai-summary-content {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.streaming-text {
+  font-size: 15px;
+  line-height: 1.8;
+  color: #444;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.cursor {
+  display: inline-block;
+  animation: blink 0.8s infinite;
+  color: #667eea;
+  font-weight: bold;
+}
+
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
   }
 }
 </style>

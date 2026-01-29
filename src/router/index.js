@@ -67,6 +67,21 @@ const routes = [
     path: '/archive',
     name: 'Archive',
     component: Archive
+  },
+  {
+    path: '/game/gomoku',
+    name: 'GomokuGame',
+    component: () => import('../views/game/gomoku/GomokuGame.vue')
+  },
+  {
+    path: '/tools/tarot',
+    name: 'Tarot',
+    component: () => import('../views/tools/Tarot.vue')
+  },
+  {
+    path: '/tools/universe',
+    name: 'Universe',
+    component: () => import('../views/tools/Universe.vue')
   }
 ]
 
