@@ -233,22 +233,31 @@ export default {
       }
       
       // 动态判断 WebSocket 地址
-      let protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://'
-      let host = window.location.host
+      // 优先使用环境变量中的 API 地址，确保连接到正确的后端
+      const apiUrl = process.env.VUE_APP_API_URL || ''
+      let wsUrl = ''
       
-      // 本地开发环境特殊处理
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-          host = 'localhost:9999'
+      if (apiUrl) {
+        // 如果配置了 API URL，从中提取 WebSocket 地址
+        wsUrl = apiUrl.replace(/^http/, 'ws') + '/ws/game'
+      } else {
+        // 本地开发或未配置时，使用当前页面地址
+        let protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://'
+        let host = window.location.host
+        
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            host = 'localhost:9999'
+        }
+        
+        wsUrl = `${protocol}${host}/ws/game`
       }
-      
-      const wsUrl = `${protocol}${host}/ws/game`
       console.log('Connecting to WebSocket:', wsUrl)
       
       this.socket = new WebSocket(wsUrl)
       
       this.socket.onopen = () => {
         this.isConnected = true
-        this.$message.success('已连接到服务器')
+        console.log('已连接到服务器')
         this.sendMessage({ type: 'LIST_ROOMS' })
       }
       
@@ -260,13 +269,13 @@ export default {
       this.socket.onclose = () => {
         this.isConnected = false
         // this.mode = 'pve' // Don't auto switch
-        this.$message.warning('服务器连接断开')
+        console.warn('服务器连接断开')
       }
       
       this.socket.onerror = (e) => {
         console.error('WebSocket Error:', e)
         this.isConnected = false
-        this.$message.error('连接服务器失败，请检查后端服务是否启动')
+        alert('连接服务器失败，请检查后端服务是否启动')
       }
     },
 
